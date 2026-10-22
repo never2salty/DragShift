@@ -65,7 +65,7 @@ def scad_to(src: Path, out: Path) -> Path:
     """Render a .scad file with OpenSCAD (STL/3MF/OFF output is chosen by the extension)."""
     tmp = out.with_name(f".~{out.stem}.part{out.suffix}")
     try:
-        p = subprocess.run([openscad_exe(), "-o", str(tmp), str(src)], capture_output=True, timeout=1800,
+        p = subprocess.run([openscad_exe(), "-o", str(tmp), str(src)], capture_output=True, timeout=600,
                            stdin=subprocess.DEVNULL, creationflags=NO_WINDOW, cwd=str(Path(src).parent))
         if p.returncode != 0 or not tmp.exists():
             err = (p.stderr or b"").decode("utf-8", "replace").strip().splitlines()

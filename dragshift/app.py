@@ -735,6 +735,11 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         pass
     if IS_WIN:
+        try:  # helper programs (FFmpeg, OpenSCAD) must never block on a Windows error dialog
+            import ctypes
+            ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002 | 0x8000)
+        except Exception:
+            pass
         try:  # crisp taskbar/tray icon grouping
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DragShift.App")
@@ -817,6 +822,7 @@ def selftest() -> int:
                       tools.ResizeWindow([str(src)], n), tools.ProtectWindow(str(pdf), n)):
                 w.close()
             ToastStack().info("ok", "ok").dismiss()
+            print("selftest: media", flush=True)
             # FFmpeg ships with the app: encode a short clip and convert its audio
             ff = media.ffmpeg_exe()
             print(f"ffmpeg: {ff}")
@@ -830,6 +836,7 @@ def selftest() -> int:
             wav = media.convert(clip, "video", "WAV")[0]
             media.convert(wav, "audio", "FLAC")
             media.fit_size(clip, 200_000)
+            print("selftest: 3d", flush=True)
             # 3D: mesh formats, preview, STEP through OpenCascade, DXF
             import trimesh
             box = Path(d) / "box.stl"
@@ -838,6 +845,7 @@ def selftest() -> int:
                 model3d.convert(box, "model", t)
             for n in model3d.MODEL_TOOLS[:1] + model3d.MODEL_TOOLS[2:]:
                 model3d.tool(box, n)
+            print("selftest: step/dxf", flush=True)
             import cascadio  # noqa: F401  (STEP backend is bundled)
             import ezdxf
             dxf = Path(d) / "p.dxf"
@@ -846,6 +854,7 @@ def selftest() -> int:
             dd.saveas(dxf)
             for t in model3d.DXF_TARGETS:
                 model3d.convert(dxf, "dxf", t)
+            print("selftest: openscad", flush=True)
             try:
                 scad = Path(d) / "s.scad"
                 scad.write_text("cube(5);")
@@ -855,6 +864,7 @@ def selftest() -> int:
                 if getattr(sys, "frozen", False) and IS_WIN:
                     raise
                 print(f"openscad skipped: {e}")
+            print("selftest: windows", flush=True)
             # history, bulk, drop icon, updater pieces
             history.HistoryWindow().close()
             bulk.BulkWindow([d], lambda *a, **k: None).close()

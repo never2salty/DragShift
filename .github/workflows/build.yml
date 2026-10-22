@@ -89,9 +89,16 @@ jobs:
         run: |
           Remove-Item Env:DRAGSHIFT_FFMPEG
           Remove-Item Env:DRAGSHIFT_OPENSCAD
+          $log = "$env:LOCALAPPDATA\DragShift\log.txt"
           foreach ($exe in @("dist\DragShift\DragShift.exe", "dist\DragShift.exe")) {
-            $p = Start-Process -FilePath $exe -ArgumentList "--selftest" -Wait -PassThru
-            if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\DragShift\log.txt" -Tail 60; throw "Self-test failed for $exe ($($p.ExitCode))" }
+            $p = Start-Process -FilePath $exe -ArgumentList "--selftest" -PassThru
+            if (-not $p.WaitForExit(420000)) {
+              Get-Process | Where-Object { $_.ProcessName -match 'openscad|ffmpeg|DragShift' } | ForEach-Object { "::warning::still running: $($_.ProcessName)" }
+              Get-Content $log -Tail 25 | ForEach-Object { "::warning::log: $_" }
+              Stop-Process -Name DragShift,openscad,ffmpeg -Force -ErrorAction SilentlyContinue
+              throw "Self-test timed out for $exe"
+            }
+            if ($p.ExitCode -ne 0) { Get-Content $log -Tail 40 | ForEach-Object { "::warning::log: $_" }; throw "Self-test failed for $exe ($($p.ExitCode))" }
             "Self-test passed: $exe"
           }
           Get-Content "$env:LOCALAPPDATA\DragShift\log.txt" -Tail 8
