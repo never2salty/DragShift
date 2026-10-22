@@ -28,7 +28,7 @@ a = Analysis(
     binaries=heif_bins + raw_bins + ff_bins + extra_bins,
     hiddenimports=["win32com.client", "PySide6.QtNetwork", "AppKit", "Quartz", "objc", "networkx", "lxml.etree"]
                   + heif_hidden + raw_hidden + extra_hidden,
-    excludes=["tkinter", "imageio_ffmpeg", "imageio", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtQml",
+    excludes=["tkinter", "imageio_ffmpeg", "imageio", "onnxruntime", "pymupdf.layout", "pymupdf4llm", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtQml",
               "PySide6.QtQuick", "PySide6.Qt3DCore", "PySide6.QtMultimedia", "PySide6.QtCharts",
               "PySide6.QtDataVisualization", "PySide6.QtPdf", "pandas", "PySide6.QtSql", "PySide6.QtTest",
               "PySide6.QtOpenGL", "PySide6.QtSvgWidgets", "PySide6.QtDesigner", "matplotlib", "scipy"],

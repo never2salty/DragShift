@@ -8,3 +8,5 @@ dist/
 e2e_*_out/
 ffmpeg-bin/
 openscad-bin/
+build/
+dist/

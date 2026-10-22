@@ -21,6 +21,10 @@ except Exception:  # pragma: no cover
 from . import rawimage  # noqa: F401  (registers camera RAW support with Pillow)
 RAW_OK = rawimage.RAW_OK
 
+# PyMuPDF 2 auto-loads an AI layout model that spawns worker processes; DragShift doesn't need it
+# (and in a frozen app those workers would start DragShift itself again)
+sys.modules.setdefault("pymupdf.layout", None)
+
 try:
     import pymupdf as fitz
 except ImportError:  # pragma: no cover
