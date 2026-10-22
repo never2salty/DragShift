@@ -18,6 +18,10 @@ VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".qt", ".mkv", ".webm", ".avi", ".wmv", ".
 AUDIO_EXTS = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wma", ".aif", ".aiff",
               ".aifc", ".ape", ".wv", ".amr", ".ac3", ".eac3", ".dts", ".mka", ".m4b", ".caf",
               ".au", ".snd", ".mpc", ".tta", ".weba", ".mp2", ".w64", ".rf64", ".bwf"}
+MODEL_EXTS = {".stl", ".3mf", ".obj", ".ply", ".glb", ".gltf", ".off", ".step", ".stp", ".scad"}
+DXF_EXTS = {".dxf"}
+PREMIERE_EXTS = {".prproj"}
+AI_EXTS = {".ai"}            # Illustrator files saved with PDF compatibility (the default)
 PDF_EXTS = {".pdf"}
 DOCX_EXTS = {".docx"}
 TEXT_EXTS = {".txt", ".md", ".csv", ".log", ".json", ".xml", ".html", ".htm"}
@@ -27,6 +31,14 @@ def category(path: str | Path) -> str | None:
     ext = Path(path).suffix.lower()
     if ext in IMAGE_EXTS:
         return "image"
+    if ext in MODEL_EXTS:
+        return "model"
+    if ext in DXF_EXTS:
+        return "dxf"
+    if ext in PREMIERE_EXTS:
+        return "premiere"
+    if ext in AI_EXTS:
+        return "ai"
     if ext in VIDEO_EXTS:
         return "video"
     if ext in AUDIO_EXTS:
@@ -83,7 +95,30 @@ CONFIG = {
 }
 
 
+_OUT = __import__("threading").local()
+
+
+class output_override:
+    """with output_override(fn): results of this thread go to fn(src) (a folder) instead."""
+
+    def __init__(self, fn):
+        self.fn = fn
+
+    def __enter__(self):
+        self.prev = getattr(_OUT, "fn", None)
+        _OUT.fn = self.fn
+        return self
+
+    def __exit__(self, *a):
+        _OUT.fn = self.prev
+
+
 def output_dir(src: str | Path) -> Path:
+    fn = getattr(_OUT, "fn", None)
+    if fn is not None:
+        d = Path(fn(Path(src)))
+        d.mkdir(parents=True, exist_ok=True)
+        return d
     d = Path(src).parent
     if CONFIG.get("output") == "folder":
         d = d / "DragShift"

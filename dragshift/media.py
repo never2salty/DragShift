@@ -28,7 +28,7 @@ NO_WINDOW = 0x08000000 if IS_WIN else 0  # CREATE_NO_WINDOW: no console flash fr
 # ---------------------------------------------------------------- formats
 VIDEO_TARGETS = ["MP4", "HEVC", "PRORES", "MOV", "MKV", "WEBM", "GIF", "MP3", "WAV"]
 AUDIO_TARGETS = ["MP3", "WAV", "FLAC", "M4A", "ALAC", "OGG", "OPUS", "AIFF"]
-VIDEO_TOOLS = ["Compress", "1080p", "720p", "Rotate", "Mute", "Thumbnail"]
+VIDEO_TOOLS = ["Compress", "Fit size", "1080p", "720p", "Rotate", "Mute", "Thumbnail"]
 AUDIO_TOOLS = ["Normalize", "Trim silence", "Mono"]
 
 TARGET_EXT = {"MP4": ".mp4", "HEVC": ".mp4", "PRORES": ".mov", "MOV": ".mov", "MKV": ".mkv",
@@ -69,6 +69,7 @@ def job_context(progress=None, cancel: threading.Event | None = None):
     """progress(fraction 0..1, text) is called from the worker thread; set `cancel` to stop."""
     _ctx.progress, _ctx.cancel = progress, cancel or threading.Event()
     _ctx.batch = (0, 1)
+    _ctx.span = (0.0, 1.0)
     try:
         yield _ctx.cancel
     finally:
@@ -80,7 +81,9 @@ def _report(frac: float, eta: float | None = None):
     if not cb:
         return
     i, n = getattr(_ctx, "batch", (0, 1))
-    total = (i + max(0.0, min(1.0, frac))) / max(1, n)
+    a, b = getattr(_ctx, "span", (0.0, 1.0))
+    frac = a + (b - a) * max(0.0, min(1.0, frac))
+    total = (i + frac) / max(1, n)
     bits = [f"{total * 100:.0f}%"]
     if n > 1:
         bits.insert(0, f"{i + 1}/{n}")
@@ -333,13 +336,15 @@ def _tmp_for(out: Path) -> Path:
     return out.with_name(f".~{out.stem}.part{out.suffix}")
 
 
-def run_ffmpeg(args: list[str], out: Path, duration: float | None) -> Path:
-    """Run FFmpeg writing to a hidden temp file, report progress, rename when done."""
+def run_ffmpeg(args: list[str], out: Path | None, duration: float | None) -> Path | None:
+    """Run FFmpeg writing to a hidden temp file, report progress, rename when done.
+    out=None runs an analysis pass that writes nothing (e.g. pass 1 of a 2-pass encode)."""
     if _cancelled():
         raise Cancelled()
-    tmp = _tmp_for(out)
+    tmp = _tmp_for(out) if out is not None else None
     log = tempfile.TemporaryFile()
-    proc = _popen(["-y", "-loglevel", "error", "-progress", "pipe:1", "-nostats", *args, str(tmp)],
+    dst = [str(tmp)] if tmp is not None else ["-f", "null", "-"]
+    proc = _popen(["-y", "-loglevel", "error", "-progress", "pipe:1", "-nostats", *args, *dst],
                   stdout=subprocess.PIPE, stderr=log)
     t0 = time.monotonic()
     last = 0.0
@@ -365,10 +370,12 @@ def run_ffmpeg(args: list[str], out: Path, duration: float | None) -> Path:
         proc.wait()
         if _cancelled():
             raise Cancelled()
-        if proc.returncode != 0 or not tmp.exists() or tmp.stat().st_size == 0:
+        if proc.returncode != 0 or (tmp is not None and (not tmp.exists() or tmp.stat().st_size == 0)):
             log.seek(0)
             err = log.read().decode("utf-8", "replace").strip().splitlines()
             raise FFmpegError(err[-1] if err else f"FFmpeg exited with code {proc.returncode}")
+        if tmp is None:
+            return None
         os.replace(tmp, out)
         _report(1.0)
         return out
@@ -376,7 +383,7 @@ def run_ffmpeg(args: list[str], out: Path, duration: float | None) -> Path:
         if proc.poll() is None:
             proc.kill()
         log.close()
-        if tmp.exists():
+        if tmp is not None and tmp.exists():
             try:
                 tmp.unlink()
             except OSError:
@@ -563,6 +570,59 @@ def thumbnail(src: str | Path) -> list[Path]:
                         "-vf", "scale=iw*sar:ih,setsar=1", "-update", "1"], out, None)]
 
 
+def plan_fit(info: Info, target_bytes: int) -> tuple[int, int, int | None]:
+    """(video kbps, audio kbps, short side to scale to or None) to land just under target_bytes."""
+    dur = info.duration or 0
+    if dur <= 0:
+        raise UserError("Couldn't read the length of this video.")
+    total_k = target_bytes * 8 / 1000 * 0.96 / dur      # 4 % for the container
+    audio_k = 0
+    if info.has_audio:
+        audio_k = 128 if total_k > 1200 else 96 if total_k > 500 else 64
+    video_k = int(total_k - audio_k)
+    if video_k < 80:
+        mb = (80 + audio_k) * dur / 8 / 1000 / 0.96 / 1000
+        raise UserError(f"That's too small for {fmt_duration(dur)} of video. Try at least {mb:.1f} MB.")
+    w, h = info.display_size
+    short = min(w, h) if w and h else 0
+    scale = None
+    for limit, side in ((700, 480), (1500, 720), (4500, 1080)):
+        if video_k < limit and short > side:
+            scale = side
+            break
+    return video_k, audio_k, scale
+
+
+@_guard
+def fit_size(src: str | Path, target_bytes: int) -> list[Path]:
+    """Two-pass H.264 so the MP4 ends up just under target_bytes (e.g. 25 MB for e-mail)."""
+    info = probe(src)
+    if not info.has_video:
+        raise UserError("No video track found in this file.")
+    video_k, audio_k, scale = plan_fit(info, target_bytes)
+    mb = target_bytes / 1_000_000
+    label = f"{mb:g} MB"
+    out = sibling(src, label, ".mp4")
+    w, h = info.display_size
+    vf = []
+    if scale:
+        vf = ["-vf", f"scale=-2:{scale}:flags=lanczos" if w >= h else f"scale={scale}:-2:flags=lanczos"]
+    v = ["-c:v", "libx264", "-preset", "medium", "-b:v", f"{video_k}k", "-pix_fmt", "yuv420p", "-profile:v", "high"]
+    with tempfile.TemporaryDirectory() as d:
+        log = str(Path(d) / "pass")
+        s = ["-i", str(src), "-map", "0:v:0"]
+        _ctx.span = (0.0, 0.45)
+        try:
+            run_ffmpeg(s + vf + v + ["-pass", "1", "-passlogfile", log, "-an"], None, info.duration)
+            _ctx.span = (0.45, 1.0)
+            a = ["-map", "0:a:0?", "-c:a", "aac", "-b:a", f"{audio_k}k"] if info.has_audio else []
+            res = run_ffmpeg(s + a + vf + v + ["-pass", "2", "-passlogfile", log] + _common_out_flags(".mp4"),
+                             out, info.duration)
+        finally:
+            _ctx.span = (0.0, 1.0)
+    return [res]
+
+
 # ---------------------------------------------------------------- audio
 def _audio_codec(target: str, info: Info) -> list[str]:
     t = target.upper()
@@ -682,7 +742,7 @@ def convert(src: str | Path, cat: str, target: str) -> list[Path]:
 
 
 def tool(src: str | Path, name: str) -> list[Path]:
-    fns = {"Compress": compress_video, "1080p": lambda p: scale_video(p, 1080),
+    fns = {"Compress": compress_video, "Fit size": lambda p: fit_size(p, 25_000_000), "1080p": lambda p: scale_video(p, 1080),
            "720p": lambda p: scale_video(p, 720), "Rotate": rotate_video, "Mute": mute_video,
            "Thumbnail": thumbnail, "Normalize": normalize_audio, "Trim silence": trim_silence, "Mono": to_mono}
     return fns[name](src)

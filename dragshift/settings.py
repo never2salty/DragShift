@@ -25,6 +25,11 @@ DEFAULTS = {
     "welcomed": False,
     "video_quality": "balanced",
     "gpu_encode": True,
+    "drop_icon": True,
+    "drop_icon_pos": "",
+    "history": True,
+    "auto_update": True,
+    "last_update_check": "0",
 }
 
 
@@ -110,8 +115,8 @@ VIDEO_QUALITIES = [("high", "High · bigger files"), ("balanced", "Balanced"), (
 class SettingsWindow(GlassWindow):
     changed = Signal()
 
-    def __init__(self, settings: Settings):
-        super().__init__("Settings", size=(540, 580))
+    def __init__(self, settings: Settings, check_updates=None):
+        super().__init__("Settings", size=(560, 700))
         self.s = settings
         grid = QGridLayout()
         grid.setHorizontalSpacing(14)
@@ -173,6 +178,29 @@ class SettingsWindow(GlassWindow):
         self.gpu.setChecked(self.s.get("gpu_encode"))
         self.gpu.toggled.connect(lambda on: self._save("gpu_encode", bool(on)))
         grid.addWidget(self.gpu, r, 1)
+        r += 1
+
+        self.drop = QCheckBox("Floating drop icon (drop files or folders on it)")
+        self.drop.setChecked(self.s.get("drop_icon"))
+        self.drop.toggled.connect(lambda on: self._save("drop_icon", bool(on)))
+        grid.addWidget(self.drop, r, 1)
+        r += 1
+        self.hist = QCheckBox("Keep a history of conversions")
+        self.hist.setChecked(self.s.get("history"))
+        self.hist.toggled.connect(lambda on: self._save("history", bool(on)))
+        grid.addWidget(self.hist, r, 1)
+        r += 1
+        upd = QHBoxLayout()
+        self.upd = QCheckBox("Look for updates once a day")
+        self.upd.setChecked(self.s.get("auto_update"))
+        self.upd.toggled.connect(lambda on: self._save("auto_update", bool(on)))
+        upd.addWidget(self.upd)
+        if check_updates:
+            now = QPushButton("Check now")
+            now.clicked.connect(check_updates)
+            upd.addWidget(now)
+        upd.addStretch(1)
+        grid.addLayout(upd, r, 1)
         r += 1
 
         if IS_WIN or IS_MAC or IS_LINUX:
@@ -274,3 +302,32 @@ class WelcomeWindow(GlassWindow):
         if IS_WIN or IS_MAC or IS_LINUX:
             set_autostart(self.auto.isChecked())
         self.close()
+
+
+class UpdateWindow(GlassWindow):
+    """“Version X is available” with the release notes and an Update button."""
+    install = Signal()
+
+    def __init__(self, rel, current: str):
+        super().__init__("Update available", size=(520, 400))
+        head = QLabel(f"DragShift {rel.version} is available")
+        head.setStyleSheet("font-size: 15pt; font-weight: 700;")
+        self.body.addWidget(head)
+        sub = QLabel(f"You have {current}. Settings and history are kept.")
+        sub.setObjectName("dim")
+        self.body.addWidget(sub)
+        notes = QLabel(rel.notes.strip()[:1200] or "No release notes.")
+        notes.setWordWrap(True)
+        notes.setTextFormat(Qt.MarkdownText)
+        notes.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.body.addWidget(notes, 1)
+        foot = QHBoxLayout()
+        foot.addStretch(1)
+        later = QPushButton("Later")
+        later.clicked.connect(self.close)
+        foot.addWidget(later)
+        go = QPushButton("Update now")
+        go.setObjectName("primary")
+        go.clicked.connect(lambda: (self.install.emit(), self.close()))
+        foot.addWidget(go)
+        self.body.addLayout(foot)

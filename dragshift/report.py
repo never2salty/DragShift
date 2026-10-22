@@ -73,6 +73,14 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
     kind, _, name = action.partition(":")
     o0 = outs[0]
     good = ""
+    if kind == "bulk":
+        folders = {o.parent for o in outs}
+        where = next(iter(folders)).name if len(folders) == 1 else f"{len(folders)} folders"
+        detail = f"{len(outs)} files · {human_size(after)} · in {where}" + (f" · {extra}" if extra else "")
+        return Result(f"Converted {len(srcs)} files", detail, outs, srcs,
+                      good="" if extra else "all done")
+    if category(src) in ("model", "dxf", "premiere", "ai"):
+        return _other_summary(kind, name, srcs, outs, after)
     if category(src) in ("video", "audio"):
         return _media_summary(kind, name, srcs, outs, before, after)
 
@@ -188,3 +196,21 @@ def _media_summary(kind: str, name: str, srcs: list[Path], outs: list[Path], bef
     if name in ("1080p", "720p") and pct_smaller:
         good = verdict
     return Result(titles.get(name, name), " · ".join(bits), outs, srcs, good=good, preview=preview)
+
+
+def _other_summary(kind: str, name: str, srcs: list[Path], outs: list[Path], after: int) -> Result:
+    o0 = outs[0]
+    bits = [o0.name if len(outs) == 1 else f"{len(outs)} files"]
+    if o0.suffix.lower() in (".stl", ".3mf", ".obj", ".ply", ".glb") and len(outs) == 1:
+        from . import model3d
+        d = model3d.describe(o0)
+        if d:
+            bits.append(d)
+    bits.append(human_size(after))
+    src_fmt = srcs[0].suffix.lstrip(".").upper()
+    if kind == "convert":
+        title = f"{len(srcs)} files → {name}" if len(srcs) > 1 else f"{src_fmt} → {name}"
+    else:
+        title = {"Repair": "Repaired", "Simplify": "Simplified", "Center": "Centered on the bed"}.get(name, name)
+    good = "opens in older Premiere" if srcs[0].suffix.lower() == ".prproj" else ""
+    return Result(title, " · ".join(bits), outs, srcs, good=good)

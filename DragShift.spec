@@ -5,6 +5,15 @@ from PyInstaller.utils.hooks import collect_all
 onefile = os.environ.get("ONEFILE") == "1"
 heif_datas, heif_bins, heif_hidden = collect_all("pillow_heif")
 raw_datas, raw_bins, raw_hidden = collect_all("rawpy")
+extra_datas, extra_bins, extra_hidden = [], [], []
+for pkg in ("trimesh", "cascadio", "ezdxf", "fast_simplification", "certifi"):
+    d_, b_, h_ = collect_all(pkg)
+    extra_datas += d_
+    extra_bins += b_
+    extra_hidden += h_
+
+# OpenSCAD for .scad files: CI downloads it to openscad-bin/ (a folder with openscad.exe and its DLLs)
+scad_datas = [("openscad-bin", "openscad")] if os.path.isdir("openscad-bin") else []
 
 # FFmpeg for video/audio: CI downloads it to ffmpeg-bin/ (see .github/workflows/build.yml)
 ff_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
@@ -15,12 +24,13 @@ if not ff_bins:
 
 a = Analysis(
     ["run.py"],
-    datas=[("dragshift/assets", "dragshift/assets")] + heif_datas + raw_datas + ff_datas,
-    binaries=heif_bins + raw_bins + ff_bins,
-    hiddenimports=["win32com.client", "PySide6.QtNetwork", "AppKit", "Quartz", "objc"] + heif_hidden + raw_hidden,
+    datas=[("dragshift/assets", "dragshift/assets")] + heif_datas + raw_datas + ff_datas + extra_datas + scad_datas,
+    binaries=heif_bins + raw_bins + ff_bins + extra_bins,
+    hiddenimports=["win32com.client", "PySide6.QtNetwork", "AppKit", "Quartz", "objc", "networkx", "lxml.etree"]
+                  + heif_hidden + raw_hidden + extra_hidden,
     excludes=["tkinter", "imageio_ffmpeg", "imageio", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtQml",
               "PySide6.QtQuick", "PySide6.Qt3DCore", "PySide6.QtMultimedia", "PySide6.QtCharts",
-              "PySide6.QtDataVisualization", "PySide6.QtPdf", "pandas", "yaml", "PySide6.QtSql", "PySide6.QtTest",
+              "PySide6.QtDataVisualization", "PySide6.QtPdf", "pandas", "PySide6.QtSql", "PySide6.QtTest",
               "PySide6.QtOpenGL", "PySide6.QtSvgWidgets", "PySide6.QtDesigner", "matplotlib", "scipy"],
 )
 
@@ -56,8 +66,8 @@ if IS_MAC:
         info_plist={
             "CFBundleName": "DragShift",
             "CFBundleDisplayName": "DragShift",
-            "CFBundleShortVersionString": "1.2.0",
-            "CFBundleVersion": "1.2.0",
+            "CFBundleShortVersionString": "1.3.0",
+            "CFBundleVersion": "1.3.0",
             "LSUIElement": True,                 # menu-bar app, no Dock icon
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,

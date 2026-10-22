@@ -41,6 +41,18 @@ jobs:
           & ffmpeg-bin\ffmpeg.exe -hide_banner -version | Select-Object -First 1
           "DRAGSHIFT_FFMPEG=$PWD\ffmpeg-bin\ffmpeg.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Download OpenSCAD (for .scad files)
+        shell: pwsh
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          Invoke-WebRequest "https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip" -OutFile scad.zip
+          Expand-Archive scad.zip -DestinationPath scaddl
+          $exe = Get-ChildItem scaddl -Recurse -Filter openscad.exe | Select-Object -First 1
+          Copy-Item $exe.Directory.FullName -Destination openscad-bin -Recurse
+          Remove-Item openscad-bin\openscad.com -ErrorAction SilentlyContinue
+          Get-ChildItem openscad-bin | Select-Object -First 8
+          "DRAGSHIFT_OPENSCAD=$PWD\openscad-bin\openscad.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -65,6 +77,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           Remove-Item Env:DRAGSHIFT_FFMPEG
+          Remove-Item Env:DRAGSHIFT_OPENSCAD
           foreach ($exe in @("dist\DragShift\DragShift.exe", "dist\DragShift.exe")) {
             $p = Start-Process -FilePath $exe -ArgumentList "--selftest" -Wait -PassThru
             if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\DragShift\log.txt" -Tail 60; throw "Self-test failed for $exe ($($p.ExitCode))" }

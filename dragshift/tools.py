@@ -1102,7 +1102,8 @@ class CompressWindow(ToolWindow):
     tool_name = "Compress"
     SIDES = [("Original size", None), ("Max 3840 px", 3840), ("Max 2560 px", 2560),
              ("Max 1920 px", 1920), ("Max 1280 px", 1280), ("Max 800 px", 800)]
-    TARGETS = [("2 MB", 2_000_000), ("1 MB", 1_000_000), ("500 KB", 500_000), ("200 KB", 200_000), ("100 KB", 100_000)]
+    TARGETS = [("2 MB", 2_000_000), ("1 MB", 1_000_000), ("500 KB", 500_000), ("200 KB", 200_000), ("100 KB", 100_000),
+               ("Custom", None)]
 
     def __init__(self, paths, notify):
         super().__init__("Compress", paths, notify, size=(640, 580))
@@ -1133,6 +1134,17 @@ class CompressWindow(ToolWindow):
             b.setChecked(i == 2)
             self.tgrp.addButton(b, i)
             tl.addWidget(b)
+        from PySide6.QtWidgets import QDoubleSpinBox
+        self.custom_kb = QDoubleSpinBox()
+        self.custom_kb.setRange(5, 500_000)
+        self.custom_kb.setDecimals(0)
+        self.custom_kb.setSuffix(" KB")
+        self.custom_kb.setValue(300)
+        self.custom_kb.setFixedWidth(100)
+        self.custom_kb.setToolTip("Any size, e.g. 350 KB for a job portal or 4000 KB")
+        self.custom_kb.valueChanged.connect(lambda _: (self.tgrp.button(len(self.TARGETS) - 1).setChecked(True),
+                                                       self._timer.start()))
+        tl.addWidget(self.custom_kb)
         tl.addStretch(1)
         self.t_box.setVisible(False)
         self.body.addWidget(self.t_box)
@@ -1224,7 +1236,7 @@ class CompressWindow(ToolWindow):
         out_long = min(self.full_long, side) if side else self.full_long
         px_ratio = (out_long / max(im.size)) ** 2
         if self.mode.checkedId() == 1:
-            limit = self.TARGETS[self.tgrp.checkedId()][1]
+            limit = self._limit()
             q = self._quality_for(im, target, limit, px_ratio)
             note = f"quality ≈ {q}"
         else:
@@ -1261,6 +1273,10 @@ class CompressWindow(ToolWindow):
         self.saving.style().unpolish(self.saving)
         self.saving.style().polish(self.saving)
 
+    def _limit(self) -> int:
+        v = self.TARGETS[self.tgrp.checkedId()][1]
+        return v if v is not None else int(self.custom_kb.value() * 1000)
+
     @staticmethod
     def _quality_for(im, target, limit, px_ratio) -> int:
         lo, hi, best = 30, 92, 30
@@ -1276,8 +1292,10 @@ class CompressWindow(ToolWindow):
         side, target = self._settings()
         paths = list(self.paths)
         if self.mode.checkedId() == 1:
-            limit = self.TARGETS[self.tgrp.checkedId()][1]
+            limit = self._limit()
             label = self.TARGETS[self.tgrp.checkedId()][0]
+            if limit is not None and self.TARGETS[self.tgrp.checkedId()][1] is None:
+                label = human_size(limit)
 
             def work():
                 outs = []
@@ -1297,7 +1315,8 @@ class CompressWindow(ToolWindow):
 # ================================================================ RESIZE
 class ResizeWindow(ToolWindow):
     tool_name = "Resize"
-    PRESETS = [("25%", "pct", 25), ("50%", "pct", 50), ("75%", "pct", 75), ("3840", "long", 3840),
+    PRESETS = [("25%", "pct", 25), ("50%", "pct", 50), ("75%", "pct", 75), ("150%", "pct", 150), ("200%", "pct", 200),
+               ("3840", "long", 3840),
                ("2560", "long", 2560), ("1920", "long", 1920), ("1280", "long", 1280), ("800", "long", 800)]
 
     def __init__(self, paths, notify):
@@ -1310,6 +1329,7 @@ class ResizeWindow(ToolWindow):
         self.body.addWidget(section("Presets — percent or longest side in px"))
         row, self.grp = toggle_row([p[0] for p in self.PRESETS], 1)
         self.grp.idClicked.connect(self._preset)
+        # (150 % / 200 % enlarge with Lanczos; nothing is invented, so expect softness)
         self.body.addLayout(row)
         self.body.addWidget(section("Exact size"))
         er = QHBoxLayout()

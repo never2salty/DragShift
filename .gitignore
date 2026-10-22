@@ -7,3 +7,4 @@ dist/
 .venv/
 e2e_*_out/
 ffmpeg-bin/
+openscad-bin/

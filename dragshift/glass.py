@@ -150,12 +150,12 @@ QSlider::handle:horizontal {{
   background: #ffffff; width: 14px; height: 14px; margin: -6px 0; border-radius: 7px;
   border: 1px solid rgba(0,0,0,0.15);
 }}
-QSpinBox, QLineEdit, QComboBox {{
+QSpinBox, QDoubleSpinBox, QLineEdit, QComboBox {{
   background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22);
   border-bottom-color: rgba(255,255,255,0.40);
   border-radius: 10px; padding: 4px 8px; selection-background-color: {ACCENT_B};
 }}
-QLineEdit:focus, QSpinBox:focus {{ border: 1px solid rgba(255,255,255,0.7); }}
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border: 1px solid rgba(255,255,255,0.7); }}
 QFrame#card {{ background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; }}
 QLabel#big {{ font-size: 17pt; font-weight: 700; }}
 QLabel#good {{ color: #8dffb8; font-weight: 600; }}

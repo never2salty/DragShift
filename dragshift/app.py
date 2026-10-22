@@ -16,7 +16,9 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QMenu, QSystemTrayIcon,
 
 import threading
 
-from . import __version__, convert, glass, imaging, media, report, tools
+from . import (__version__, adobe, bulk, convert, dispatch, glass, history, imaging, media, model3d, report,
+               tools, updater)
+from .dropzone import DropIcon
 from .radial import Item, RadialMenu
 from .settings import Settings, SettingsWindow, WelcomeWindow, TRIGGERS
 from .toasts import ToastStack
@@ -35,7 +37,7 @@ GLYPHS = {"Compress": "⇲", "Metadata": "ⓘ", "Redact": "▮", "Crop": "⌗", 
           "Annotate": "✎", "Add BG": "▣", "Resize": "⤢", "Split": "✂", "Rotate": "⟳",
           "Merge": "⧉", "Protect": "⚿", "Extract": "⧈",
           "1080p": "⤓", "720p": "⤓", "Mute": "⊘", "Thumbnail": "▦", "Normalize": "≋", "Trim silence": "⇥",
-          "Mono": "◉"}
+          "Mono": "◉", "Fit size": "⇲", "Repair": "✚", "Simplify": "◇", "Center": "⊕"}
 
 HINTS = {
     "Compress": "Shrink file size", "Metadata": "View · remove GPS", "Redact": "Hide private info",
@@ -47,7 +49,8 @@ HINTS = {
     "Thumbnail": "Save a frame as JPG", "Normalize": "Loudness −14 LUFS", "Trim silence": "Cut start/end silence",
     "Mono": "Stereo → mono",
 }
-VIDEO_HINTS = {"Compress": "Smaller H.264 MP4", "Rotate": "Turn 90° clockwise"}
+VIDEO_HINTS = {"Compress": "Smaller H.264 MP4", "Rotate": "Turn 90° clockwise", "Fit size": "Under 8/16/25 MB…"}
+MODEL_HINTS = {"Repair": "Fix normals · fill holes", "Simplify": "Half the triangles", "Center": "Middle of the bed, z = 0"}
 FORMAT_HINTS = {"JPG": "Small, universal", "PNG": "Lossless · transparency", "WEBP": "Smallest for web",
                 "HEIC": "iPhone format", "TIFF": "Print · archival", "AVIF": "Next-gen, tiny",
                 "BMP": "Uncompressed", "PDF": "Document", "ICO": "Windows icon", "GIF": "Legacy web",
@@ -60,6 +63,9 @@ FORMAT_HINTS = {"JPG": "Small, universal", "PNG": "Lossless · transparency", "W
                 "MP3": "320 kbps · universal", "WAV": "Uncompressed", "FLAC": "Lossless, smaller",
                 "M4A": "AAC 256 kbps · Apple", "ALAC": "Apple Lossless", "OGG": "Vorbis · open",
                 "OPUS": "Best for voice/web", "AIFF": "Uncompressed · Mac"}
+MODEL_FORMAT_HINTS = {"STL": "Every slicer", "3MF": "Bambu · Prusa · Cura", "OBJ": "Blender · games",
+                      "PLY": "Scans · point data", "GLB": "Web · AR · 3D viewer", "PNG": "Preview picture",
+                      "PDF": "Print the drawing", "SVG": "Vector · laser cutter"}
 VIDEO_FORMAT_HINTS = {"GIF": "First 30 s · 15 fps", "MP3": "Extract audio · 320k", "WAV": "Extract audio"}
 LABELS = {"HEVC": "H.265", "PRORES": "ProRes"}
 
@@ -85,8 +91,12 @@ class Job(QRunnable):
     def run(self):
         try:
             with media.job_context(lambda frac, text: self.sig.progress.emit(text), self.cancel):
-                outs = self.fn() or []
-            self.sig.done.emit(report.summarize(self.action, self.srcs, outs, self.extra))
+                res = self.fn() or []
+            extra = self.extra
+            if isinstance(res, tuple):
+                res, more = res
+                extra = more or extra
+            self.sig.done.emit(report.summarize(self.action, self.srcs, list(res), extra))
         except media.Cancelled:
             self.sig.cancelled.emit()
         except UserError as e:
@@ -106,6 +116,14 @@ def friendly_error(e: Exception) -> str:
     if isinstance(e, FileNotFoundError):
         return "The file was moved or deleted."
     return msg
+
+
+def needs_bulk(paths: list[str]) -> bool:
+    """A folder, or several files of different kinds, goes to the folder window."""
+    if any(os.path.isdir(p) for p in paths):
+        return True
+    cats = {category(p) for p in paths}
+    return len(paths) > 1 and len(cats) > 1
 
 
 # ---------------------------------------------------------------- icon
@@ -189,16 +207,31 @@ class DragShiftApp(QObject):
         self.act_enabled.toggled.connect(lambda on: setattr(self.watcher, "enabled", on))
         m.addAction(self.act_enabled)
         m.addAction("Open a file…", self.open_dialog)
+        m.addAction("Convert a folder…", self.open_folder_dialog)
+        m.addAction("History…", self.open_history)
+        self.act_drop = QAction("Show drop icon", m, checkable=True, checked=self.settings.get("drop_icon"))
+        self.act_drop.toggled.connect(self.set_drop_icon)
+        m.addAction(self.act_drop)
         m.addSeparator()
         m.addAction("Settings…", self.open_settings)
+        m.addAction("Check for updates…", lambda: self.check_updates(manual=True))
         m.addAction("How to use", self.show_welcome)
-        m.addAction("Tip the developer ♥", lambda: QDesktopServices.openUrl(QUrl(TIP_URL)))
         m.addSeparator()
         m.addAction(f"Quit {APP_NAME}", self.qapp.quit)
         self.tray_menu = m
         self.tray.setContextMenu(m)
         self.tray.activated.connect(self._tray_click)
         self.tray.show()
+
+        # floating drop icon
+        self.drop_icon: DropIcon | None = None
+        if self.settings.get("drop_icon"):
+            self.set_drop_icon(True)
+        # quiet update check once a day
+        if self.settings.get("auto_update") and updater.can_self_update():
+            last = float(self.settings.get("last_update_check") or 0)
+            if time.time() - last > 20 * 3600:
+                QTimer.singleShot(8000, lambda: self.check_updates(manual=False))
 
     def trigger_label(self) -> str:
         return dict(TRIGGERS).get(self.settings.get("trigger"), "Shift")
@@ -249,6 +282,13 @@ class DragShiftApp(QObject):
     def _flush_pending(self):
         files, self._pending = self._pending, []
         if files:
+            self.open_paths(files)
+
+    def open_paths(self, files: list[str]):
+        """Files from the drop icon, right-click, Send to: one kind → the menu, folders/mixed → bulk."""
+        if needs_bulk(files):
+            self.open_bulk(files)
+        else:
             self.show_click_menu(files)
 
     # ------------------------------------------------------------ menu contents
@@ -258,16 +298,23 @@ class DragShiftApp(QObject):
         return human_size(file_size(paths[0]))
 
     def build_rings(self, paths: list[str]) -> dict[str, list[Item]]:
+        if needs_bulk(paths):
+            n_dirs = sum(os.path.isdir(p) for p in paths)
+            hint = "Pick a format per type" if n_dirs else f"{len(paths)} mixed files"
+            return {"Folder": [Item("Convert all", "⧉", key="bulk:all", hint=hint)]}
         cat = category(paths[0])
         if cat is None:
             return {"Unsupported": []}
         ext = Path(paths[0]).suffix
         same = [p for p in paths if category(p) == cat]
         convert_items = []
-        targets = media.targets_for(cat, ext) if cat in ("video", "audio") else convert.targets_for(cat, ext)
+        targets = dispatch.targets_for(cat, ext)
         for t in targets:
-            hint = (VIDEO_FORMAT_HINTS.get(t) if cat == "video" else None) or FORMAT_HINTS.get(t, "")
-            if cat in ("video", "audio"):
+            hint = (VIDEO_FORMAT_HINTS.get(t) if cat == "video" else None) or \
+                (MODEL_FORMAT_HINTS.get(t) if cat in ("model", "dxf") else None) or FORMAT_HINTS.get(t, "")
+            if cat == "premiere":
+                hint = "Version → 1 · safe copy"
+            if cat in ("video", "audio", "model", "dxf", "premiere", "ai"):
                 convert_items.append(Item(LABELS.get(t, t), key=f"convert:{t}", hint=hint))
                 continue
             if cat == "image" and t == "PDF" and len(same) > 1:
@@ -284,13 +331,32 @@ class DragShiftApp(QObject):
                               for n in media.VIDEO_TOOLS]
         elif cat == "audio":
             rings["Tools"] = [Item(n, GLYPHS[n], key=f"tool:{n}", hint=HINTS[n]) for n in media.AUDIO_TOOLS]
+        elif cat == "model":
+            rings["Tools"] = [Item(n, GLYPHS[n], key=f"tool:{n}", hint=MODEL_HINTS[n]) for n in model3d.MODEL_TOOLS]
         return rings
 
     # ------------------------------------------------------------ actions
     def run_item(self, item: Item, paths: list[str]):
+        kind, name = item.key.split(":", 1)
+        if kind == "bulk":
+            self.open_bulk(paths)
+            return
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
-        kind, name = item.key.split(":", 1)
+        if cat == "video" and name == "Fit size":
+            from .mediatools import FitSizeWindow
+            self.open_window(FitSizeWindow(paths, self.notify))
+            return
+        if cat in ("model", "dxf", "premiere", "ai"):
+            label = LABELS.get(name, name)
+            if kind == "convert":
+                self.submit(f"convert:{label}", paths,
+                            lambda: media.run_batch(paths, lambda p: dispatch.convert_file(p, cat, name)),
+                            "Rendering…" if name == "PNG" else f"Converting to {label}…")
+            else:
+                self.submit(f"tool:{name}", paths, lambda: media.run_batch(paths, lambda p: model3d.tool(p, name)),
+                            {"Repair": "Repairing…", "Simplify": "Simplifying…", "Center": "Centering…"}[name])
+            return
         if cat in ("video", "audio"):
             label = LABELS.get(name, name)
             if kind == "convert":
@@ -298,7 +364,7 @@ class DragShiftApp(QObject):
                             lambda: media.run_batch(paths, lambda p: media.convert(p, cat, name)),
                             f"Converting to {label}…", cancellable=True)
             else:
-                verbs = {"Compress": "Compressing…", "1080p": "Scaling to 1080p…", "720p": "Scaling to 720p…",
+                verbs = {"Compress": "Compressing…", "Fit size": "Fitting to size…", "1080p": "Scaling to 1080p…", "720p": "Scaling to 720p…",
                          "Rotate": "Rotating…", "Mute": "Removing audio…", "Thumbnail": "Grabbing a frame…",
                          "Normalize": "Normalizing loudness…", "Trim silence": "Trimming silence…",
                          "Mono": "Mixing to mono…"}
@@ -312,7 +378,8 @@ class DragShiftApp(QObject):
             else:
                 verb = f"Converting to {name}…"
                 self.submit(f"convert:{name}", paths,
-                            lambda: [o for p in paths for o in convert.convert(p, cat, name)], verb)
+                            lambda: media.run_batch(paths, lambda p: convert.convert(p, cat, name)), verb,
+                            cancellable=len(paths) > 1)
             return
         if cat == "pdf":
             if name == "Merge":
@@ -357,6 +424,8 @@ class DragShiftApp(QObject):
     def submit(self, action: str, srcs: list, fn, working: str = "Working…", extra: str = "",
                cancellable: bool = False):
         """Run in the background. A spinner card appears only if it takes > 150 ms."""
+        if not cancellable and srcs and category(srcs[0]) in ("video", "audio"):
+            cancellable = True
         state = {"card": None, "finished": False, "progress": ""}
         names = Path(srcs[0]).name if len(srcs) == 1 else f"{len(srcs)} files"
         job = Job(action, srcs, fn, extra)
@@ -381,6 +450,7 @@ class DragShiftApp(QObject):
             state["finished"] = True
             card = state["card"] or self.toasts.new()
             card.done(r)
+            self.remember(r)
 
         def failed(msg):
             release(job)
@@ -402,7 +472,163 @@ class DragShiftApp(QObject):
 
     def notify(self, action: str, srcs: list, outs: list, extra: str = ""):
         """Called by tool windows after they save."""
-        self.toasts.new().done(report.summarize(action, srcs, outs, extra))
+        r = report.summarize(action, srcs, outs, extra)
+        self.toasts.new().done(r)
+        self.remember(r)
+
+    def remember(self, r):
+        if not self.settings.get("history"):
+            return
+        try:
+            history.record(r)
+        except Exception:
+            traceback.print_exc()
+        w = next((w for w in self.windows if isinstance(w, history.HistoryWindow)), None)
+        if w is not None:
+            w.reload()
+
+    # ------------------------------------------------------------ history, bulk, drop icon, updates
+    def open_history(self):
+        w = next((w for w in self.windows if isinstance(w, history.HistoryWindow)), None)
+        if w is not None:
+            w.reload()
+            w.raise_()
+            w.activateWindow()
+            return
+        self.open_window(history.HistoryWindow())
+
+    def open_bulk(self, paths: list[str]):
+        try:
+            self.open_window(bulk.BulkWindow(paths, self.submit))
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            self.toasts.error("Couldn't open the folder", friendly_error(e))
+
+    def open_folder_dialog(self):
+        d = QFileDialog.getExistingDirectory(None, "Choose a folder to convert", QDir.homePath())
+        if d:
+            self.open_bulk([d])
+
+    def set_drop_icon(self, on: bool):
+        self.settings.set("drop_icon", bool(on))
+        if self.act_drop.isChecked() != bool(on):
+            self.act_drop.setChecked(bool(on))
+        if on and self.drop_icon is None:
+            ic = DropIcon()
+            pos = self.settings.get("drop_icon_pos")
+            from PySide6.QtCore import QPoint
+            try:
+                x, y = (int(v) for v in str(pos).split(","))
+                ic.place(QPoint(x, y))
+            except Exception:
+                ic.place(None)
+            ic.dropped.connect(self._icon_dropped)
+            ic.clicked.connect(self.open_dialog)
+            ic.moved_to.connect(lambda p: self.settings.set("drop_icon_pos", f"{p.x()},{p.y()}"))
+            ic.menu_requested.connect(self._icon_menu)
+            ic.show()
+            self.drop_icon = ic
+        elif not on and self.drop_icon is not None:
+            self.drop_icon.close()
+            self.drop_icon.deleteLater()
+            self.drop_icon = None
+
+    def _icon_dropped(self, files: list[str]):
+        files = [f for f in files if os.path.exists(f)]
+        if not files:
+            return
+        if needs_bulk(files):
+            self.open_bulk(files)
+            return
+        # open the menu right next to the icon so the choice is one short move away
+        g = self.drop_icon.frameGeometry()
+        from PySide6.QtCore import QPoint
+        scr = (QGuiApplication.screenAt(g.center()) or QGuiApplication.primaryScreen()).availableGeometry()
+        x = g.left() - 210 if g.center().x() > scr.center().x() else g.right() + 210
+        y = min(max(g.center().y(), scr.top() + 210), scr.bottom() - 210)
+        self.menu.popup(QPoint(x, y), files)
+        self.menu.activateWindow()
+
+    def _icon_menu(self, pos):
+        m = QMenu()
+        m.setStyleSheet(glass.QSS)
+        m.addAction("Open a file…", self.open_dialog)
+        m.addAction("Convert a folder…", self.open_folder_dialog)
+        m.addAction("History…", self.open_history)
+        m.addSeparator()
+        m.addAction("Settings…", self.open_settings)
+        m.addAction("Hide drop icon", lambda: self.set_drop_icon(False))
+        m.exec(pos)
+
+    def check_updates(self, manual: bool = True):
+        self.settings.set("last_update_check", str(time.time()))
+        state = {}
+
+        def work():
+            state["rel"] = updater.latest()
+            return []
+
+        job = Job("update:check", [], work)
+
+        def checked(_r):
+            release(job)
+            rel = state.get("rel")
+            if rel is None:
+                return
+            if updater.newer(rel.version):
+                self._offer_update(rel)
+            elif manual:
+                self.toasts.info("You're up to date", f"DragShift {VERSION} is the latest version.")
+
+        def failed(msg):
+            release(job)
+            if manual:
+                self.toasts.error("Couldn't check for updates", msg)
+
+        job.sig.done.connect(checked)
+        job.sig.failed.connect(failed)
+        self.pool.start(keep(job))
+
+    def _offer_update(self, rel):
+        from .settings import UpdateWindow
+        w = UpdateWindow(rel, VERSION)
+        w.install.connect(lambda: self._install_update(rel))
+        self.open_window(w)
+
+    def _install_update(self, rel):
+        if not updater.can_self_update():
+            QDesktopServices.openUrl(QUrl(rel.page))
+            return
+        state = {"card": self.toasts.new()}
+        state["card"].working(f"Downloading DragShift {rel.version}…", "starting…")
+        holder = {}
+
+        def work():
+            holder["file"] = updater.fetch_update(rel)
+            return []
+
+        job = Job("update:get", [], work)
+        state["card"].on_cancel = job.cancel.set
+        job.sig.progress.connect(lambda t: state["card"].set_progress(t))
+
+        def done(_r):
+            release(job)
+            state["card"].info("Installing update…", "DragShift restarts in a moment", 4000)
+            try:
+                updater.apply_update(holder["file"])
+            except Exception as e:  # noqa: BLE001
+                state["card"].error("Update failed", str(e))
+                return
+            QTimer.singleShot(600, self.qapp.quit)
+
+        def failed(msg):
+            release(job)
+            state["card"].error("Update failed", msg)
+
+        job.sig.done.connect(done)
+        job.sig.failed.connect(failed)
+        job.sig.cancelled.connect(lambda: (release(job), state["card"].info("Update cancelled", "", 2000)))
+        self.pool.start(keep(job))
 
     # ------------------------------------------------------------ misc
     def _tray_click(self, reason):
@@ -422,11 +648,14 @@ class DragShiftApp(QObject):
         self.menu.activateWindow()
 
     def open_settings(self):
-        w = SettingsWindow(self.settings)
+        w = SettingsWindow(self.settings, check_updates=lambda: self.check_updates(manual=True))
         w.changed.connect(self._settings_changed)
         self.open_window(w)
 
     def _settings_changed(self):
+        on = bool(self.settings.get("drop_icon"))
+        if on != (self.drop_icon is not None):
+            self.set_drop_icon(on)
         self.watcher.set_key(self.settings.get("trigger"))
         self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file")
 
@@ -600,6 +829,37 @@ def selftest() -> int:
                 media.convert(clip, "video", t)
             wav = media.convert(clip, "video", "WAV")[0]
             media.convert(wav, "audio", "FLAC")
+            media.fit_size(clip, 200_000)
+            # 3D: mesh formats, preview, STEP through OpenCascade, DXF
+            import trimesh
+            box = Path(d) / "box.stl"
+            trimesh.creation.box((20, 10, 5)).export(box)
+            for t in model3d.targets_for("model", ".stl"):
+                model3d.convert(box, "model", t)
+            for n in model3d.MODEL_TOOLS[:1] + model3d.MODEL_TOOLS[2:]:
+                model3d.tool(box, n)
+            import cascadio  # noqa: F401  (STEP backend is bundled)
+            import ezdxf
+            dxf = Path(d) / "p.dxf"
+            dd = ezdxf.new()
+            dd.modelspace().add_circle((0, 0), 10)
+            dd.saveas(dxf)
+            for t in model3d.DXF_TARGETS:
+                model3d.convert(dxf, "dxf", t)
+            try:
+                scad = Path(d) / "s.scad"
+                scad.write_text("cube(5);")
+                print(f"openscad: {model3d.openscad_exe()}")
+                model3d.convert(scad, "model", "STL")
+            except UserError as e:
+                if getattr(sys, "frozen", False) and IS_WIN:
+                    raise
+                print(f"openscad skipped: {e}")
+            # history, bulk, drop icon, updater pieces
+            history.HistoryWindow().close()
+            bulk.BulkWindow([d], lambda *a, **k: None).close()
+            DropIcon().close()
+            assert updater.newer("99.0") and not updater.newer("0.1")
             check_text_renders()
         print("SELFTEST OK")
         return 0

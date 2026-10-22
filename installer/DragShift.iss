@@ -1,7 +1,7 @@
 ; Inno Setup script — per-user install, no admin rights needed.
 #define AppVersion GetEnv("DS_VERSION")
 #if AppVersion == ""
-  #define AppVersion "1.2.0"
+  #define AppVersion "1.3.0"
 #endif
 
 [Setup]
@@ -42,10 +42,21 @@ Root: HKCU; Subkey: "Software\Classes\*\shell\DragShift"; ValueType: string; Val
 Root: HKCU; Subkey: "Software\Classes\*\shell\DragShift"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\DragShift.exe"; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\*\shell\DragShift"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\*\shell\DragShift\command"; ValueType: string; ValueName: ""; ValueData: """{app}\DragShift.exe"" ""%1"""; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\DragShift"; ValueType: string; ValueName: "MUIVerb"; ValueData: "Convert with DragShift…"; Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\DragShift"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\DragShift.exe"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\DragShift\command"; ValueType: string; ValueName: ""; ValueData: """{app}\DragShift.exe"" ""%1"""; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\DragShift"; Flags: uninsdeletekey
 
 [Run]
 Filename: "{app}\DragShift.exe"; Description: "Launch DragShift now"; Flags: nowait postinstall skipifsilent
+; in-app updates run the installer silently with /LAUNCH: start the new version afterwards
+Filename: "{app}\DragShift.exe"; Parameters: "--quiet"; Flags: nowait; Check: LaunchAfterSilent
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /F /IM DragShift.exe"; Flags: runhidden; RunOnceId: "KillDragShift"
+
+[Code]
+function LaunchAfterSilent: Boolean;
+begin
+  Result := WizardSilent and (Pos('/LAUNCH', UpperCase(GetCmdTail)) > 0);
+end;
