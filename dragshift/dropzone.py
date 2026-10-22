@@ -54,7 +54,8 @@ class DropIcon(QWidget):
     # ------------------------------------------------------------ drag & drop
     @staticmethod
     def _paths(md) -> list[str]:
-        return [u.toLocalFile() for u in md.urls() if u.isLocalFile() and u.toLocalFile()]
+        import os
+        return [os.path.normpath(u.toLocalFile()) for u in md.urls() if u.isLocalFile() and u.toLocalFile()]
 
     def dragEnterEvent(self, e):
         if self._paths(e.mimeData()):
