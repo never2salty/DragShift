@@ -59,7 +59,16 @@ jobs:
           pip install -r requirements.txt pyinstaller pytest
 
       - name: Run tests
-        run: python -m pytest -q
+        shell: pwsh
+        run: |
+          python -m pytest -q -rfE -p no:cacheprovider 2>&1 | Tee-Object -FilePath pytest-out.txt
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            # failures as annotations: visible on the run page without downloading logs
+            Get-Content pytest-out.txt | Where-Object { $_ -match '^(FAILED|ERROR) |^E  ' } |
+              Select-Object -First 40 | ForEach-Object { "::error::$($_ -replace '[\r\n]', ' ')" }
+            exit $code
+          }
         env:
           QT_QPA_PLATFORM: offscreen
 

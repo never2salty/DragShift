@@ -1,4 +1,35 @@
-# DragShift
+# DragShift (+ Video, Audio, 3D & mehr)
+
+Fork von [DragShift](https://github.com/llamaboi55/DragShift) (MIT) mit Video-, Audio-, RAW-, 3D/CAD- und Adobe-Konvertierung, Verlauf, Drop-Icon, Ordner-Konvertierung und In-App-Updates. Datei ziehen → **Shift** → auf ein Segment fallen lassen.
+
+**Download (Windows):** [neuestes Release](../../releases/latest) → **DragShift-Setup.exe** (empfohlen) oder die portable **DragShift.exe**. SmartScreen warnt, weil die App nicht signiert ist: *Weitere Informationen → Trotzdem ausführen*. FFmpeg und OpenSCAD sind enthalten.
+
+## Was diese Version kann
+
+| Dateien | Umwandeln in | Werkzeuge |
+| --- | --- | --- |
+| **Video** – MOV/QuickTime, MP4, MKV, MXF, AVI, MTS, WebM, ProRes RAW … | MP4 (H.264), H.265, ProRes 422/HQ, MOV/MKV (ohne Neukodierung), WebM, GIF, MP3/WAV | Compress · **Fit size** (8/16/25 MB oder frei, Zwei-Pass) · 1080p · 720p · Rotate · Mute · Thumbnail |
+| **Audio** – MP3, WAV, FLAC, M4A, ALAC, OGG, Opus, AIFF, WMA … | MP3 320k, WAV, FLAC, M4A, ALAC, OGG, Opus, AIFF (24 Bit bleibt 24 Bit, Cover & Tags bleiben) | Normalize (−14 LUFS) · Trim silence · Mono |
+| **Bilder** – JPG, PNG, HEIC, WebP, AVIF, TIFF, PSD, **Kamera-RAW** (CR2/CR3, NEF, ARW, DNG, RAF …) | JPG, PNG, WebP, HEIC, AVIF, TIFF, PDF … (Kamera, Datum, GPS bleiben) | Compress (Qualität oder **Zielgröße frei in KB**) · Resize (auch 150 %/200 %) · Crop · Edit · Annotate · Redact · Add BG · Metadata |
+| **3D** – STL, 3MF, OBJ, PLY, GLB, **STEP**, **OpenSCAD** | STL, 3MF, OBJ, PLY, GLB, PNG-Vorschau | Repair · Simplify · Center (auf Druckbett) |
+| **CAD-Zeichnung** – DXF | PDF, PNG, SVG | – |
+| **Adobe** – Premiere .prproj, Illustrator .ai | Premiere: Kopie für ältere Premiere-Versionen · AI: PDF, PNG, JPG, SVG | – |
+| PDF, Word, Text | wie im Original | wie im Original |
+
+**Neu in 1.3**
+- **Drop-Icon:** schwebender Knopf (an/aus im Tray-Menü und in den Einstellungen). Dateien oder Ordner hineinziehen → das Menü öffnet sich direkt daneben. Mit der Maus verschiebbar, Rechtsklick für Verlauf/Einstellungen/Ausblenden.
+- **Verlauf:** Tray → *History…* – Öffnen, Ordner zeigen, ✕ pro Eintrag, *Clear all* (die Dateien selbst bleiben).
+- **Ordner konvertieren:** Ordner aufs Icon ziehen, Rechtsklick auf einen Ordner → *Convert with DragShift…*, oder Shift-Drag. Pro Dateityp ist ein Ziel vorausgewählt (HEIC → JPG, MOV → MP4, WAV → MP3 …), Unterordner optional, Ergebnis in „Ordner (converted)“ mit gleicher Struktur.
+- **Updates im Programm:** einmal täglich oder Tray → *Check for updates…*: lädt das neue Setup und installiert es still, DragShift startet danach neu. Setzt voraus, dass dieses GitHub-Repo öffentlich ist.
+
+Kamera-RAW-**Video** von Blackmagic (BRAW), RED (R3D), ARRI und Canon Cinema RAW lässt sich nur mit den SDKs der Hersteller lesen – DragShift sagt das und verweist auf DaVinci Resolve. Premiere-Projekte aus älteren Versionen öffnet die neue Premiere selbst; das Werkzeug hier ist für die andere Richtung (neu → alt).
+
+**Aus dem Quellcode starten (Python 3.12):** `pip install -r requirements.txt` und `python -m dragshift`.
+
+---
+
+## Original-README (upstream)
+
 
 Convert and edit files on **Windows, Mac and Linux** with a liquid-glass radial menu. Start dragging any file, press **Shift**, and drop it on a slice.
 
