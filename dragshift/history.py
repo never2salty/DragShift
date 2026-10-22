@@ -6,6 +6,7 @@ import os
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -49,7 +50,7 @@ def record(result) -> None:
     if not getattr(result, "outs", None):
         return
     entry = {
-        "id": f"{time.time():.6f}",
+        "id": uuid.uuid4().hex,
         "time": time.time(),
         "title": result.title,
         "detail": result.detail,
