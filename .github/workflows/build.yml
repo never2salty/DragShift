@@ -108,10 +108,26 @@ jobs:
             dist/DragShift.exe
             dist/DragShift-Setup.exe
 
-      - name: Publish release (tags v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path dragshift\__init__.py -Pattern '"([\d.]+)"').Matches[0].Groups[1].Value
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish release (main branch and v* tags)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.ver.outputs.version) }}
+          target_commitish: ${{ github.sha }}
+          name: DragShift ${{ steps.ver.outputs.version }}
+          make_latest: true
+          body: |
+            **DragShift-Setup.exe** installieren (für den eigenen Benutzer, keine Adminrechte) – oder **DragShift.exe** portabel starten.
+            Windows SmartScreen warnt, weil die App nicht signiert ist: *Weitere Informationen → Trotzdem ausführen*.
+
+            Neu: Video- und Audio-Konverter (FFmpeg enthalten), Kamera-RAW-Fotos, Fortschritt + Abbrechen, GPU-Encoding.
           files: |
             dist/DragShift.exe
             dist/DragShift-Setup.exe
