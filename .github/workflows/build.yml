@@ -61,7 +61,7 @@ jobs:
       - name: Run tests
         shell: pwsh
         run: |
-          python -m pytest -q -rfE -p no:cacheprovider 2>&1 | Tee-Object -FilePath pytest-out.txt
+          python -m pytest tests -q -rfE -p no:cacheprovider 2>&1 | Tee-Object -FilePath pytest-out.txt
           $code = $LASTEXITCODE
           if ($code -ne 0) {
             # failures as annotations: visible on the run page without downloading logs
