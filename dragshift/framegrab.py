@@ -91,22 +91,47 @@ def _in_matrix(info: media.Info) -> str:
     return ":in_color_matrix=bt709"
 
 
+def _zscale_in(info: media.Info) -> str:
+    """zimg input description from the stream tags (BT.709 / limited when untagged)."""
+    line = _video_line(info)
+    if re.search(r"bt2020", line):
+        m = "2020_ncl"
+    elif re.search(r"smpte170m|bt470bg", line) or (info.height < 600 and "bt709" not in line):
+        m = "170m"
+    else:
+        m = "709"
+    r = "full" if re.search(r"\((pc|jpeg)[,)]", line) or "yuvj" in line else "limited"
+    return f"min={m}:rin={r}"
+
+
 def frame_filter(info: media.Info, preview: bool, grade: G.Grade | None = None, export: bool = False) -> str:
-    """Square pixels, preview size, HDR → SDR when there's no grade, the grade as a 3D LUT."""
+    """Square pixels, preview size, HDR → SDR when there's no grade, the grade as a 3D LUT.
+    YUV → RGB goes through zimg (zscale): FFmpeg 9's swscale tints neutral greys slightly, and log
+    footage + LUT turns that into a visible colour cast."""
     graded = grade is not None and not grade.is_identity()
+    hdr = not graded and is_hdr(info) and _has_filter("zscale") and _has_filter("tonemap")
+    use_z = _has_filter("zscale") and not hdr
     if preview:
         pw, ph = preview_size(info)
-        f = [f"scale={pw}:{ph}:flags=bilinear{_in_matrix(info)}", "setsar=1"]
+        if use_z:
+            f = [f"zscale=w={pw}:h={ph}:f=bilinear:{_zscale_in(info)}", "setsar=1"]
+        else:
+            f = [f"scale={pw}:{ph}:flags=bilinear{_in_matrix(info)}", "setsar=1"]
     else:
-        f = [f"scale=iw*sar:ih:flags=lanczos{_in_matrix(info)}", "setsar=1"]
-    if not graded and is_hdr(info) and _has_filter("zscale") and _has_filter("tonemap"):
+        if use_z:
+            f = [f"zscale=w=trunc(iw*sar/2)*2:h=ih:f=lanczos:{_zscale_in(info)}", "setsar=1"]
+        else:
+            f = [f"scale=iw*sar:ih:flags=lanczos{_in_matrix(info)}", "setsar=1"]
+    if use_z:
+        f.append("format=gbrpf32le" if graded else "format=gbrp")
+    if hdr:
         f += ["zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
               "tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv"]
     if graded:
         if preview:
-            f += ["format=rgb24", G.lut3d_filter(grade, 33, "trilinear")[0]]
+            f += ([] if use_z else ["format=rgb24"]) + [G.lut3d_filter(grade, 33, "trilinear")[0]]
         else:
-            f += ["format=rgb48le", G.lut3d_filter(grade, 65, "tetrahedral")[0]]
+            f += ([] if use_z else ["format=rgb48le"]) + [G.lut3d_filter(grade, 65, "tetrahedral")[0]]
     if not export:
         f.append("format=rgb24")
     return ",".join(f)
@@ -120,7 +145,9 @@ def frame_time(n: int, fps: float) -> float:
 def grab_raw(src: Path, info: media.Info, t: float, fast: bool = False, hdr_map: bool = True) -> np.ndarray | None:
     """One ungraded frame at time t at preview size, as uint8 (H, W, 3). fast: nearest keyframe."""
     pw, ph = preview_size(info)
-    vf = frame_filter(info, True) if hdr_map else f"scale={pw}:{ph}:flags=bilinear{_in_matrix(info)},setsar=1,format=rgb24"
+    vf = frame_filter(info, True) if hdr_map else (
+        f"zscale=w={pw}:h={ph}:f=bilinear:{_zscale_in(info)},setsar=1,format=gbrp,format=rgb24" if _has_filter("zscale")
+        else f"scale={pw}:{ph}:flags=bilinear{_in_matrix(info)},setsar=1,format=rgb24")
     for _ in range(2):
         args = _hw() + (["-noaccurate_seek"] if fast else []) + [
             "-ss", f"{t:.4f}", "-i", str(Path(src).resolve()), "-map", "0:v:0", "-frames:v", "1", "-an", "-sn",
@@ -187,14 +214,16 @@ def export_graded(src: str | Path, g: G.Grade, target: str = "H264") -> list[Pat
     if target == "PRORES":
         pcm = "pcm_s24le" if info.abits > 16 else "pcm_s16le"
         a = ["-c:a", pcm] if info.has_audio else []
-        vf += ",scale=out_color_matrix=bt709:out_range=tv,format=yuv422p10le"
+        vf += (",format=gbrpf32le,zscale=m=709:r=limited,format=yuv422p10le" if _has_filter("zscale")
+               else ",scale=out_color_matrix=bt709:out_range=tv,format=yuv422p10le")
         args = ["-i", str(src), *maps, "-vf", vf, "-c:v", "prores_ks", "-profile:v", "3", "-vendor", "apl0",
                 *a, *tags, *media._common_out_flags(ext)]
         return [media.run_ffmpeg(args, out, info.duration, cwd=G.cube_dir())]
     codec = "h264" if target == "H264" else "hevc"
     fake = replace(info, pix_fmt="yuv420p10le" if codec == "hevc" else "yuv420p")
     pix = "yuv420p10le" if codec == "hevc" else "yuv420p"
-    vf += f",scale=out_color_matrix=bt709:out_range=tv,format={pix}"
+    vf += (f",format=gbrpf32le,zscale=m=709:r=limited,format={pix}" if _has_filter("zscale")
+           else f",scale=out_color_matrix=bt709:out_range=tv,format={pix}")
 
     def args_for(hw):
         v, gpu = media._video_args(codec, fake, media._quality(), hw)

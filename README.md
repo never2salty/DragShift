@@ -38,6 +38,13 @@ Kamera-RAW-**Video** von Blackmagic (BRAW), RED (R3D), ARRI und Canon Cinema RAW
 
 ---
 
+## Lizenzen
+
+DragShift basiert auf [DragShift von llamaboi55](https://github.com/llamaboi55/DragShift) (MIT-Lizenz, siehe `LICENSE`). Der Windows-Installer enthält zusätzlich unveränderte Programme anderer Projekte:
+- **FFmpeg** (GPL-Build von [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), Lizenztext im Programmordner unter `ffmpeg/FFMPEG-LICENSE.txt`; Quellcode: [ffmpeg.org](https://ffmpeg.org/download.html#get-sources) und [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds))
+- **OpenSCAD** 2021.01 (GPL-2.0; Quellcode: [github.com/openscad/openscad](https://github.com/openscad/openscad/tree/openscad-2021.01))
+- Python-Bibliotheken wie PySide6 (LGPL), Pillow, PyMuPDF (AGPL), trimesh, ezdxf, rawpy (LibRaw), sounddevice (PortAudio) – jeweils unter ihren eigenen Lizenzen.
+
 ## Original-README (upstream)
 
 
