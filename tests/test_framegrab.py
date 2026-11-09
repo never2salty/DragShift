@@ -129,8 +129,9 @@ def test_play_to_end(qapp, tmp_path):
     w.close()
 
 
-def test_audio_file_refused(tmp_path):
+def test_audio_file_opens_as_waveform(qapp, tmp_path):
     p = tmp_path / "a.wav"
     subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "sine=d=1", str(p)], check=True)
-    with pytest.raises(Exception, match="No video"):
-        framegrab.make_window([str(p)], None)
+    w = framegrab.make_window([str(p)], None)
+    assert w.audio_mode and not w.shot_btn.isVisible() and w.frames == 100
+    w.close()

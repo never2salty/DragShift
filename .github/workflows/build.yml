@@ -158,7 +158,7 @@ jobs:
             **DragShift-Setup.exe** installieren (für den eigenen Benutzer, keine Adminrechte) – oder **DragShift.exe** portabel starten.
             Windows SmartScreen warnt, weil die App nicht signiert ist: *Weitere Informationen → Trotzdem ausführen*.
 
-            Neu in 1.5: Player mit Ton, LUTs (S-Log3, F-Log/F-Log2), Belichtung/Kontrast/…, Presets, Export und Screenshots mit Grading. Kreismenü wechselt per Mausrad, Doppelklick aufs Tray-Symbol holt den Drop-Kreis.
+            Neu in 1.6: ein Player-Fenster mit Dateiliste und Vorschaubildern (Ordner/Dateien reinziehen), Trimmen mit In/Out, Loop und exaktem oder schnellem Schnitt – auch für WAV/MP3 mit Wellenform, Werte eintippen, Startkreis per Klick aufs Drop-Icon.
           files: |
             dist/DragShift.exe
             dist/DragShift-Setup.exe

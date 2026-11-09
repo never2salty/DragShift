@@ -36,7 +36,7 @@ IPC_NAME = ipc_name()
 GLYPHS = {"Compress": "⇲", "Metadata": "ⓘ", "Redact": "▮", "Crop": "⌗", "Edit": "☼",
           "Annotate": "✎", "Add BG": "▣", "Resize": "⤢", "Split": "✂", "Rotate": "⟳",
           "Merge": "⧉", "Protect": "⚿", "Extract": "⧈",
-          "1080p": "⤓", "720p": "⤓", "Mute": "⊘", "Thumbnail": "▦", "Screenshots": "◎", "Normalize": "≋", "Trim silence": "⇥",
+          "1080p": "⤓", "720p": "⤓", "Mute": "⊘", "Thumbnail": "▦", "Screenshots": "◎", "Trim": "✂", "Normalize": "≋", "Trim silence": "⇥",
           "Mono": "◉", "Fit size": "⇲", "Repair": "✚", "Simplify": "◇", "Center": "⊕"}
 
 HINTS = {
@@ -46,7 +46,7 @@ HINTS = {
     "Rotate": "Turn pages 90°", "Merge": "Join into one PDF", "Protect": "Add a password",
     "Extract": "Save embedded images",
     "1080p": "Downscale · H.264 MP4", "720p": "Downscale · H.264 MP4", "Mute": "Remove the audio",
-    "Thumbnail": "Save a frame as JPG", "Screenshots": "Player · LUT · screenshots", "Normalize": "Loudness −14 LUFS", "Trim silence": "Cut start/end silence",
+    "Thumbnail": "Save a frame as JPG", "Screenshots": "Player · LUT · screenshots", "Trim": "Set In / Out · loop · cut", "Normalize": "Loudness −14 LUFS", "Trim silence": "Cut start/end silence",
     "Mono": "Stereo → mono",
 }
 VIDEO_HINTS = {"Compress": "Smaller H.264 MP4", "Rotate": "Turn 90° clockwise", "Fit size": "Under 8/16/25 MB…"}
@@ -208,6 +208,7 @@ class DragShiftApp(QObject):
         m.addAction(self.act_enabled)
         m.addAction("Open a file…", self.open_dialog)
         m.addAction("Convert a folder…", self.open_folder_dialog)
+        m.addAction("Player / Trim…", lambda: self.open_player([], "player"))
         m.addAction("History…", self.open_history)
         self.act_drop = QAction("Show drop icon", m, checkable=True, checked=self.settings.get("drop_icon"))
         self.act_drop.toggled.connect(self.set_drop_icon)
@@ -302,7 +303,13 @@ class DragShiftApp(QObject):
         if needs_bulk(paths):
             n_dirs = sum(os.path.isdir(p) for p in paths)
             hint = "Pick a format per type" if n_dirs else f"{len(paths)} mixed files"
-            return {"Folder": [Item("Convert all", "⧉", key="bulk:all", hint=hint)]}
+            items = [Item("Convert all", "⧉", key="bulk:all", hint=hint)]
+            from .framegrab import expand_media
+            media_files = expand_media(paths, limit=200)
+            if media_files:
+                items += [Item("Player", "◎", key="player:player", hint=f"{len(media_files)} videos/audio · screenshots"),
+                          Item("Trim", "✂", key="player:trim", hint="Pick a file · set In / Out")]
+            return {"Folder": items}
         cat = category(paths[0])
         if cat is None:
             return {"Unsupported": []}
@@ -342,14 +349,13 @@ class DragShiftApp(QObject):
         if kind == "bulk":
             self.open_bulk(paths)
             return
+        if kind == "player":
+            self.open_player(paths, name)
+            return
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
-        if cat == "video" and name == "Screenshots":
-            from .framegrab import make_window
-            try:
-                self.open_window(make_window(paths, self.notify))
-            except UserError as e:
-                self.toasts.error("Can't open this video", str(e))
+        if cat in ("video", "audio") and name in ("Screenshots", "Trim"):
+            self.open_player(paths, "trim" if name == "Trim" else "player")
             return
         if cat == "video" and name == "Fit size":
             from .mediatools import FitSizeWindow
@@ -512,6 +518,72 @@ class DragShiftApp(QObject):
             traceback.print_exc()
             self.toasts.error("Couldn't open the folder", friendly_error(e))
 
+    def open_player(self, paths: list[str], mode: str = "player"):
+        """One player window: new files are added to the open one instead of opening another."""
+        w = next((w for w in self.windows if getattr(w, "is_player", False) and w.isVisible()), None)
+        try:
+            if w is not None:
+                new = w.add_paths(paths) if paths else []
+                if paths and not new:
+                    # already in the list: just switch to it
+                    from .framegrab import expand_media
+                    want = [str(p.resolve()).lower() for p in expand_media(paths)]
+                    for i, p in enumerate(w.paths):
+                        if str(p.resolve()).lower() in want:
+                            w.open_clip(i)
+                            break
+                w.showNormal()
+                w.raise_()
+                w.activateWindow()
+                return w
+            from .framegrab import make_window
+            w = make_window(paths, self.notify, mode)
+            self.open_window(w)
+            return w
+        except UserError as e:
+            self.toasts.error("Can't open this", str(e))
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            self.toasts.error("Can't open this", friendly_error(e))
+
+    # ------------------------------------------------------------ start menu (click on the drop icon)
+    START_ITEMS = [("Player", "◎", "start:player", "Screenshots · LUT · export"),
+                   ("Trim", "✂", "start:trim", "Video or audio · In / Out"),
+                   ("Convert", "⇄", "start:file", "Pick a file"),
+                   ("Folder", "⧉", "start:folder", "Convert a whole folder"),
+                   ("History", "↺", "start:history", "What you converted"),
+                   ("Settings", "⚙", "start:settings", "")]
+
+    def show_start_menu(self, near: QWidget | None = None):
+        if not hasattr(self, "start_menu"):
+            self.start_menu = RadialMenu(lambda p: {"Start": [Item(l, g, key=k, hint=h)
+                                                              for l, g, k, h in self.START_ITEMS]},
+                                         lambda p: "DragShift")
+            self.start_menu.activated.connect(self._start_chosen)
+        pos = QCursor.pos()
+        if near is not None:
+            g = near.frameGeometry()
+            scr = (QGuiApplication.screenAt(g.center()) or QGuiApplication.primaryScreen()).availableGeometry()
+            x = g.left() - 210 if g.center().x() > scr.center().x() else g.right() + 210
+            y = min(max(g.center().y(), scr.top() + 210), scr.bottom() - 210)
+            from PySide6.QtCore import QPoint
+            pos = QPoint(x, y)
+        self.start_menu.popup(pos, ["DragShift"])
+        self.start_menu.activateWindow()
+
+    def _start_chosen(self, item, _paths):
+        k = item.key.split(":", 1)[1]
+        if k in ("player", "trim"):
+            self.open_player([], k)
+        elif k == "file":
+            self.open_dialog()
+        elif k == "folder":
+            self.open_folder_dialog()
+        elif k == "history":
+            self.open_history()
+        elif k == "settings":
+            self.open_settings()
+
     def open_folder_dialog(self):
         d = QFileDialog.getExistingDirectory(None, "Choose a folder to convert", QDir.homePath())
         if d:
@@ -531,7 +603,7 @@ class DragShiftApp(QObject):
             except Exception:
                 ic.place(None)
             ic.dropped.connect(self._icon_dropped)
-            ic.clicked.connect(self.open_dialog)
+            ic.clicked.connect(lambda: self.show_start_menu(self.drop_icon))
             ic.moved_to.connect(lambda p: self.settings.set("drop_icon_pos", f"{p.x()},{p.y()}"))
             ic.menu_requested.connect(self._icon_menu)
             ic.show()
@@ -860,6 +932,9 @@ def selftest() -> int:
             framegrab.save_frame(clip, 0.5, "JPG")
             assert framegrab.grab_preview(clip, media.probe(clip), 0.5) is not None
             framegrab.make_window([str(clip)], None).close()
+            framegrab.trim_fast(clip, 0.2, 0.8)
+            assert framegrab.waveform(wav) is not None and framegrab.thumbnail_image(clip) is not None
+            framegrab.trim_audio(wav, 0.1, 0.6)
             from . import grade as G
             framegrab.export_graded(clip, G.Grade(profile="slog3cine", lut=G.BUILTIN, exposure=0.5), "H264")
             framegrab.save_frame(clip, 0.5, "JPG", grade=G.Grade(contrast=0.3))

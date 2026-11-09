@@ -16,6 +16,13 @@ Fork von [DragShift](https://github.com/llamaboi55/DragShift) (MIT) mit Video-, 
 | **Adobe** – Premiere .prproj, Illustrator .ai | Premiere: Kopie für ältere Premiere-Versionen · AI: PDF, PNG, JPG, SVG | – |
 | PDF, Word, Text | wie im Original | wie im Original |
 
+**Neu in 1.6: ein Player für alles, Trimmen, Startkreis.**
+- **Ein Fenster statt vieler:** Ordner oder mehrere Dateien öffnen → links eine Liste mit Vorschaubild, Länge und Auflösung, per Klick wechseln. Neue Videos, Audiodateien oder ganze Ordner einfach ins offene Fenster ziehen (oder ＋ / 📁). Öffnest du später weitere Dateien, landen sie im selben Fenster.
+- **Trimmen** (Video und Audio): In mit **I**, Out mit **O** oder die gelben Griffe auf der Zeitleiste ziehen, **▶ In→Out** (P) spielt nur den Bereich, **🔁 Loop** (L) wiederholt ihn. **✂ Save trim**: „Exact“ schneidet framegenau (mit Grading, im Export-Format) oder „Fast“ ohne Neukodierung (sofort, ab Keyframe). Audio (WAV, MP3, FLAC …) wird sample-genau im gleichen Format geschnitten – mit Wellenform-Ansicht.
+- **Werte eintippen:** Auf die Zahl neben Exposure, Contrast usw. klicken und tippen (auch „0,7“), Enter.
+- **Klick aufs Drop-Icon** öffnet den Startkreis: Player, Trim, Convert, Folder, History, Settings. Dateien hineinziehen funktioniert wie bisher.
+- Ordner im Kreismenü bietet jetzt zusätzlich **Player** und **Trim**; Video- und Audio-Tools haben **Trim**.
+
 **Neu in 1.5: Player mit Ton, LUTs und Farbkorrektur.**
 - Abspielen jetzt flüssig und **mit Ton** (bis 2×, darüber stumm), 🔊/🔇 mit M.
 - **🎨 Color** (Taste C): Kamera-Profil (Sony S-Log3 · S-Gamut3.Cine/S-Gamut3, Fujifilm F-Log/F-Log2, Standard), **LUT** per Drag & Drop einer .cube-Datei oder aus „zuletzt benutzt“, eingebaute Kamera → Rec.709-Umwandlung, LUT-Stärke, Belichtung (echte Blenden), Kontrast, Lichter, Tiefen, Sättigung, Temperatur, Tönung. „Hold: original“ zeigt den Vorher-Zustand.

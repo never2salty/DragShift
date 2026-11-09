@@ -28,8 +28,8 @@ NO_WINDOW = 0x08000000 if IS_WIN else 0  # CREATE_NO_WINDOW: no console flash fr
 # ---------------------------------------------------------------- formats
 VIDEO_TARGETS = ["MP4", "HEVC", "PRORES", "MOV", "MKV", "WEBM", "GIF", "MP3", "WAV"]
 AUDIO_TARGETS = ["MP3", "WAV", "FLAC", "M4A", "ALAC", "OGG", "OPUS", "AIFF"]
-VIDEO_TOOLS = ["Screenshots", "Compress", "Fit size", "1080p", "720p", "Rotate", "Mute"]  # Thumbnail: tool() only
-AUDIO_TOOLS = ["Normalize", "Trim silence", "Mono"]
+VIDEO_TOOLS = ["Screenshots", "Trim", "Compress", "Fit size", "1080p", "720p", "Rotate", "Mute"]  # Thumbnail: tool() only
+AUDIO_TOOLS = ["Trim", "Normalize", "Trim silence", "Mono"]
 
 TARGET_EXT = {"MP4": ".mp4", "HEVC": ".mp4", "PRORES": ".mov", "MOV": ".mov", "MKV": ".mkv",
               "WEBM": ".webm", "GIF": ".gif", "MP3": ".mp3", "WAV": ".wav", "FLAC": ".flac",

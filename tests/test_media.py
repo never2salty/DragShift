@@ -101,7 +101,7 @@ def test_audio_from_mp3_targets(clips):
     assert streams(wav).acodec == "pcm_s16le"  # lossy source → 16-bit is plenty
 
 
-@pytest.mark.parametrize("name", [n for n in media.VIDEO_TOOLS if n != "Screenshots"] + ["Thumbnail"])
+@pytest.mark.parametrize("name", [n for n in media.VIDEO_TOOLS if n not in ("Screenshots", "Trim")] + ["Thumbnail"])
 def test_video_tools(clips, name):
     if name == "1080p":
         with pytest.raises(Exception, match="already"):
@@ -125,7 +125,7 @@ def test_downscale_landscape(clips):
     assert streams(out[0]).display_size == (854, 480)
 
 
-@pytest.mark.parametrize("name", media.AUDIO_TOOLS)
+@pytest.mark.parametrize("name", [n for n in media.AUDIO_TOOLS if n != "Trim"])
 def test_audio_tools(clips, name):
     out = media.tool(clips["song"], name)[0]
     i = streams(out)
