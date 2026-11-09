@@ -144,14 +144,18 @@ def grey_clip(tmp_path_factory):
     y = int(round(16 + 0.4106 * 219))
     w, h, n = 1920, 1080, 75
     frame = bytes([y]) * (w * h) + bytes([128]) * (w * h // 2)
+    # tag the frames on input: tagging only the output makes FFmpeg 9 insert its own (slightly tinting) conversion
     proc = subprocess.Popen([FF, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", f"{w}x{h}",
-                             "-r", "25", "-i", "-", "-f", "lavfi", "-i", "sine=d=3", "-map", "0:v", "-map", "1:a",
-                             "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", "-colorspace", "bt709",
-                             "-c:a", "aac", "-shortest", str(p)], stdin=subprocess.PIPE)
+                             "-r", "25", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+                             "-color_range", "tv", "-i", "-", "-f", "lavfi", "-i", "sine=d=3", "-map", "0:v", "-map", "1:a",
+                             "-c:v", "libx264", "-qp", "0", "-c:a", "aac", "-shortest", str(p)], stdin=subprocess.PIPE)
     for _ in range(n):
         proc.stdin.write(frame)
     proc.stdin.close()
     assert proc.wait() == 0
+    raw = media._run_quick(["-loglevel", "error", "-i", str(p), "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-"]).stdout
+    yuv = (raw[w * h // 2 + w // 2], raw[w * h + w * h // 8 + w // 4], raw[w * h * 5 // 4 + w * h // 8 + w // 4])
+    assert yuv == (y, 128, 128), f"test clip isn't exact grey: {yuv}"
     return p
 
 
