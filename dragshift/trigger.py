@@ -93,3 +93,62 @@ class DragShiftWatcher(QObject):
                 self._down_at = None
                 self._fired = False
         self._shift_was = shift
+
+
+class WheelHook:
+    """While the menu is open, catch the mouse wheel anywhere (also during an Explorer drag,
+    when the wheel never reaches our window) and swallow it so nothing underneath scrolls.
+    Windows only; elsewhere the menu's own wheelEvent is used. Installed only while visible."""
+    WH_MOUSE_LL, WM_MOUSEWHEEL = 14, 0x020A
+
+    def __init__(self, on_wheel):
+        self.on_wheel = on_wheel   # called with +1 (wheel up) / -1 (wheel down)
+        self.hook = None
+        self.acc = 0
+        self._proc = None
+        self.ok = sys.platform == "win32"
+
+    def install(self):
+        if not self.ok or self.hook:
+            return
+        from ctypes import wintypes
+        user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+        LRESULT = ctypes.c_ssize_t
+        HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+
+        class MSLL(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long), ("mouseData", wintypes.DWORD),
+                        ("flags", wintypes.DWORD), ("time", wintypes.DWORD), ("extra", ctypes.c_size_t)]
+        user32.CallNextHookEx.argtypes = [wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
+        user32.CallNextHookEx.restype = LRESULT
+        user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
+        user32.SetWindowsHookExW.restype = wintypes.HHOOK
+        user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+        kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+
+        def proc(n, wparam, lparam):
+            try:
+                if n == 0 and wparam == self.WM_MOUSEWHEEL:
+                    info = ctypes.cast(lparam, ctypes.POINTER(MSLL)).contents
+                    delta = ctypes.c_short((info.mouseData >> 16) & 0xFFFF).value
+                    self.acc += delta
+                    while abs(self.acc) >= 120:          # one notch (touchpads send small steps)
+                        step = 1 if self.acc > 0 else -1
+                        self.acc -= 120 * step
+                        QTimer.singleShot(0, lambda s=step: self.on_wheel(s))
+                    return 1                               # swallow: don't scroll what's underneath
+            except Exception:
+                pass
+            return user32.CallNextHookEx(None, n, wparam, lparam)
+
+        self._proc = HOOKPROC(proc)
+        self.hook = user32.SetWindowsHookExW(self.WH_MOUSE_LL, self._proc, kernel32.GetModuleHandleW(None), 0)
+        self.acc = 0
+
+    def uninstall(self):
+        if self.hook:
+            try:
+                ctypes.windll.user32.UnhookWindowsHookEx(self.hook)
+            except Exception:
+                pass
+        self.hook = None

@@ -190,7 +190,7 @@ def _media_summary(kind: str, name: str, srcs: list[Path], outs: list[Path], bef
         title = f"Compressed {len(srcs)} videos" if len(srcs) > 1 else "Compressed"
         return Result(title, f"{sizes} · {o0.name}", outs, srcs, good=verdict, preview=preview)
     titles = {"1080p": "Scaled to 1080p", "720p": "Scaled to 720p", "Rotate": "Rotated 90°", "Mute": "Audio removed",
-              "Thumbnail": "Frame saved", "Screenshots": "Screenshots saved", "Normalize": "Loudness normalized", "Trim silence": "Silence trimmed",
+              "Thumbnail": "Frame saved", "Screenshots": "Screenshots saved", "Graded": "Graded video exported", "Normalize": "Loudness normalized", "Trim silence": "Silence trimmed",
               "Mono": "Mixed to mono"}
     if name == "Screenshots" and len(outs) == 1:
         titles["Screenshots"] = "Screenshot saved"

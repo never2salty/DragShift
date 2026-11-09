@@ -46,7 +46,7 @@ HINTS = {
     "Rotate": "Turn pages 90°", "Merge": "Join into one PDF", "Protect": "Add a password",
     "Extract": "Save embedded images",
     "1080p": "Downscale · H.264 MP4", "720p": "Downscale · H.264 MP4", "Mute": "Remove the audio",
-    "Thumbnail": "Save a frame as JPG", "Screenshots": "Pick frames · save PNG/JPG", "Normalize": "Loudness −14 LUFS", "Trim silence": "Cut start/end silence",
+    "Thumbnail": "Save a frame as JPG", "Screenshots": "Player · LUT · screenshots", "Normalize": "Loudness −14 LUFS", "Trim silence": "Cut start/end silence",
     "Mono": "Stereo → mono",
 }
 VIDEO_HINTS = {"Compress": "Smaller H.264 MP4", "Rotate": "Turn 90° clockwise", "Fit size": "Under 8/16/25 MB…"}
@@ -200,7 +200,7 @@ class DragShiftApp(QObject):
         self.server.newConnection.connect(self._ipc)
 
         self.tray = QSystemTrayIcon(make_tray_icon(), self)
-        self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file")
+        self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file · double-click: drop circle")
         m = QMenu()
         m.setStyleSheet(glass.QSS)
         self.act_enabled = QAction("Enabled", m, checkable=True, checked=True)
@@ -212,6 +212,7 @@ class DragShiftApp(QObject):
         self.act_drop = QAction("Show drop icon", m, checkable=True, checked=self.settings.get("drop_icon"))
         self.act_drop.toggled.connect(self.set_drop_icon)
         m.addAction(self.act_drop)
+        m.addAction("Bring drop circle bottom-right", self.summon_drop_icon)
         m.addSeparator()
         m.addAction("Settings…", self.open_settings)
         m.addAction("Check for updates…", lambda: self.check_updates(manual=True))
@@ -639,9 +640,20 @@ class DragShiftApp(QObject):
 
     # ------------------------------------------------------------ misc
     def _tray_click(self, reason):
-        # macOS: a click on the menu-bar icon shows the menu; Windows: click opens a file
-        if not IS_MAC and reason in (QSystemTrayIcon.DoubleClick, QSystemTrayIcon.Trigger):
-            self.open_dialog()
+        # single click: nothing (it's easy to hit by accident); double-click: bring the drop
+        # circle back to the bottom-right corner, switching it on if it was off
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.summon_drop_icon()
+
+    def summon_drop_icon(self):
+        if self.drop_icon is None:
+            self.set_drop_icon(True)
+        ic = self.drop_icon
+        ic.place(None)                       # bottom-right of the main screen, above the taskbar
+        self.settings.set("drop_icon_pos", f"{ic.pos().x()},{ic.pos().y()}")
+        ic.show()
+        ic.raise_()
+        ic.pulse()
 
     def open_dialog(self):
         files, _ = QFileDialog.getOpenFileNames(None, "Choose file(s) for DragShift", QDir.homePath())
@@ -664,7 +676,7 @@ class DragShiftApp(QObject):
         if on != (self.drop_icon is not None):
             self.set_drop_icon(on)
         self.watcher.set_key(self.settings.get("trigger"))
-        self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file")
+        self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file · double-click: drop circle")
 
     def show_welcome(self):
         self.open_window(WelcomeWindow(self.settings, self.trigger_label()))
@@ -848,6 +860,13 @@ def selftest() -> int:
             framegrab.save_frame(clip, 0.5, "JPG")
             assert framegrab.grab_preview(clip, media.probe(clip), 0.5) is not None
             framegrab.make_window([str(clip)], None).close()
+            from . import grade as G
+            framegrab.export_graded(clip, G.Grade(profile="slog3cine", lut=G.BUILTIN, exposure=0.5), "H264")
+            framegrab.save_frame(clip, 0.5, "JPG", grade=G.Grade(contrast=0.3))
+            from . import audioplay
+            print(f"sound: {'ok' if audioplay.SOUND_OK else 'missing'}", flush=True)
+            if getattr(sys, "frozen", False) and IS_WIN:
+                assert audioplay.SOUND_OK, "sounddevice/PortAudio missing from the build"
             print("selftest: 3d", flush=True)
             # 3D: mesh formats, preview, STEP through OpenCascade, DXF
             import trimesh

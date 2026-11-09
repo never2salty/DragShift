@@ -44,8 +44,19 @@ class DropIcon(QWidget):
         scr = QGuiApplication.primaryScreen().availableGeometry()
         if pos is None or not any(s.availableGeometry().contains(pos + QPoint(SIZE // 2, SIZE // 2))
                                   for s in QGuiApplication.screens()):
-            pos = QPoint(scr.right() - SIZE - 24, scr.bottom() - SIZE - 120)
+            pos = QPoint(scr.right() - SIZE - 24, scr.bottom() - SIZE - 24)
         self.move(pos)
+
+    def pulse(self):
+        """Glow for a moment so it's easy to spot after being summoned."""
+        self.hot = True
+        self.anim.start()
+
+        def off():
+            self.hot = False
+            self.anim.stop()
+            self.update()
+        QTimer.singleShot(1400, off)
 
     def _tick(self):
         self.phase = (self.phase + 3) % 360

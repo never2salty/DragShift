@@ -14,6 +14,11 @@ except Exception:  # pragma: no cover
 pytestmark = pytest.mark.skipif(FF is None, reason="FFmpeg not available")
 
 
+@pytest.fixture(autouse=True)
+def _appdata(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))   # no saved grade from elsewhere
+
+
 @pytest.fixture(scope="module")
 def qapp():
     from PySide6.QtWidgets import QApplication

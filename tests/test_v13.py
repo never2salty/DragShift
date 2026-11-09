@@ -314,3 +314,46 @@ def test_settings_and_update_windows(qapp):
     SettingsWindow(Settings(), check_updates=lambda: None).close()
     rel = updater.Release("9.0", "**New**", "https://x/s.exe", None, "https://x")
     UpdateWindow(rel, "1.3.0").close()
+
+
+# ---------------------------------------------------------------- 1.5: menu wheel + tray
+def test_menu_category_only_changes_by_wheel(qapp, tmp_path):
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+    from dragshift.app import DragShiftApp
+    from dragshift.radial import RadialMenu
+    f = tmp_path / "a.png"
+    Image.new("RGB", (10, 10)).save(f)
+    m = RadialMenu(lambda p: DragShiftApp.build_rings(None, p), lambda p: "1 KB")
+    m._load([str(f)])
+    assert len(m.ring_names) == 2 and m.ring_idx == 0
+    for _ in range(20):                       # hovering the hub no longer flips anything
+        m._set_hover(-2)
+        m._set_hover(0)
+    qapp.processEvents()
+    assert m.ring_idx == 0
+
+    def wheel(dy):
+        ev = QWheelEvent(QPointF(50, 50), QPointF(50, 50), QPoint(0, 0), QPoint(0, dy), Qt.NoButton,
+                         Qt.NoModifier, Qt.NoScrollPhase, False)
+        m.wheelEvent(ev)
+    m.show()
+    wheel(-120)
+    assert m.ring_idx == 1
+    wheel(60)
+    assert m.ring_idx == 1                    # half a touchpad notch: nothing yet
+    wheel(60)
+    assert m.ring_idx == 0
+    m.close_menu()
+
+
+def test_tray_double_click_summons_drop_circle(qapp, monkeypatch):
+    from PySide6.QtWidgets import QSystemTrayIcon
+    from dragshift import app as appmod
+    calls = []
+    fake = type("F", (), {"summon_drop_icon": lambda self: calls.append("summon"),
+                          "open_dialog": lambda self: calls.append("dialog")})()
+    appmod.DragShiftApp._tray_click(fake, QSystemTrayIcon.Trigger)
+    assert calls == []
+    appmod.DragShiftApp._tray_click(fake, QSystemTrayIcon.DoubleClick)
+    assert calls == ["summon"]

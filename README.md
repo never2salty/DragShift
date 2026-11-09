@@ -16,6 +16,14 @@ Fork von [DragShift](https://github.com/llamaboi55/DragShift) (MIT) mit Video-, 
 | **Adobe** – Premiere .prproj, Illustrator .ai | Premiere: Kopie für ältere Premiere-Versionen · AI: PDF, PNG, JPG, SVG | – |
 | PDF, Word, Text | wie im Original | wie im Original |
 
+**Neu in 1.5: Player mit Ton, LUTs und Farbkorrektur.**
+- Abspielen jetzt flüssig und **mit Ton** (bis 2×, darüber stumm), 🔊/🔇 mit M.
+- **🎨 Color** (Taste C): Kamera-Profil (Sony S-Log3 · S-Gamut3.Cine/S-Gamut3, Fujifilm F-Log/F-Log2, Standard), **LUT** per Drag & Drop einer .cube-Datei oder aus „zuletzt benutzt“, eingebaute Kamera → Rec.709-Umwandlung, LUT-Stärke, Belichtung (echte Blenden), Kontrast, Lichter, Tiefen, Sättigung, Temperatur, Tönung. „Hold: original“ zeigt den Vorher-Zustand.
+- **Presets**: LUT + alle Regler speichern und auf jedes Video anwenden, danach z. B. nur noch die Belichtung nachziehen.
+- Screenshots kommen **mit Grading** in voller Auflösung (16-Bit-Verarbeitung); **Export** als H.264, H.265 10-Bit oder ProRes 422 HQ. Mehrere Videos auf einmal öffnen → mit ◀ ▶ (Bild↑/Bild↓) durchblättern, jedes behält seine Einstellungen, „Export all“ exportiert alle.
+- **Kreismenü:** Die Kategorie (Convert ⇄ Tools) wechselt nur noch mit dem **Mausrad** – Hovern ändert nichts mehr.
+- **Tray-Symbol:** Einfacher Klick macht nichts mehr, **Doppelklick holt den Drop-Kreis nach unten rechts** (und schaltet ihn ein, falls er aus war).
+
 **Neu in 1.4: Screenshots aus Videos.** Video ziehen → Shift → *Tools → Screenshots*. Ein kleiner Player öffnet sich: Slider ziehen, ←/→ Bild für Bild, Shift+←/→ eine Sekunde, ±10 s, Abspielen mit 1×–16× (Leertaste), dann **Screenshot** (S oder Enter). Gespeichert wird der exakte Frame in voller Auflösung als PNG oder JPG neben dem Video („Clip 01m23.456s.png“); HDR-Videos (iPhone) werden für das Bild in normale Farben umgerechnet.
 
 **Neu in 1.3**

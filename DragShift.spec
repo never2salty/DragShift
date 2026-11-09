@@ -6,8 +6,11 @@ onefile = os.environ.get("ONEFILE") == "1"
 heif_datas, heif_bins, heif_hidden = collect_all("pillow_heif")
 raw_datas, raw_bins, raw_hidden = collect_all("rawpy")
 extra_datas, extra_bins, extra_hidden = [], [], []
-for pkg in ("trimesh", "cascadio", "ezdxf", "fast_simplification", "certifi"):
-    d_, b_, h_ = collect_all(pkg)
+for pkg in ("trimesh", "cascadio", "ezdxf", "fast_simplification", "certifi", "sounddevice", "_sounddevice_data"):
+    try:
+        d_, b_, h_ = collect_all(pkg)   # _sounddevice_data (PortAudio DLL) exists on Windows/macOS only
+    except Exception:
+        continue
     extra_datas += d_
     extra_bins += b_
     extra_hidden += h_
@@ -66,8 +69,8 @@ if IS_MAC:
         info_plist={
             "CFBundleName": "DragShift",
             "CFBundleDisplayName": "DragShift",
-            "CFBundleShortVersionString": "1.4.0",
-            "CFBundleVersion": "1.4.0",
+            "CFBundleShortVersionString": "1.5.0",
+            "CFBundleVersion": "1.5.0",
             "LSUIElement": True,                 # menu-bar app, no Dock icon
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,

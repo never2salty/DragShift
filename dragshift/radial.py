@@ -131,7 +131,11 @@ class RadialMenu(QWidget):
         self.swap_anim = QVariantAnimation(self, startValue=0.0, endValue=1.0, duration=220,
                                            easingCurve=QEasingCurve.OutCubic)
         self.swap_anim.valueChanged.connect(self._set_swap)
-        self.hub_timer = QTimer(self, singleShot=True, interval=420, timeout=self.next_ring)
+        # category (Convert ⇄ Tools) changes only with the mouse wheel, a hub click or the trigger key;
+        # hovering never switches it
+        from .trigger import WheelHook
+        self.wheel_hook = WheelHook(self._wheel_step)
+        self._wheel_acc = 0
         self.frame = QTimer(self, interval=16, timeout=self._tick)   # 60 fps springs
 
     # ------------------------------------------------------------ show / hide
@@ -208,6 +212,7 @@ class RadialMenu(QWidget):
         self._shape()
         self.show()
         self.raise_()
+        self.wheel_hook.install()
         self.anim.start()
         self.frame.start()
         if self.click_mode:
@@ -218,10 +223,10 @@ class RadialMenu(QWidget):
         if self.isVisible():
             self.hide()
             self.frame.stop()
-            self.hub_timer.stop()
             self.dismissed.emit()
 
     def hideEvent(self, e):
+        self.wheel_hook.uninstall()
         self.frame.stop()
         if QWidget.mouseGrabber() is self:
             self.releaseMouse()
@@ -273,9 +278,27 @@ class RadialMenu(QWidget):
             path = path.united(outer)       # united, not added: odd-even fill would punch a hole
         glass.apply_shape(self, path)
 
-    def next_ring(self):
+    def _wheel_step(self, step: int):
+        if self.isVisible():
+            self.prev_ring() if step > 0 else self.next_ring()
+
+    def wheelEvent(self, e):
+        if self.wheel_hook.hook:          # the global hook already handled it
+            e.accept()
+            return
+        self._wheel_acc += e.angleDelta().y() or e.angleDelta().x()
+        while abs(self._wheel_acc) >= 120:
+            step = 1 if self._wheel_acc > 0 else -1
+            self._wheel_acc -= 120 * step
+            self._wheel_step(step)
+        e.accept()
+
+    def prev_ring(self):
+        self.next_ring(-1)
+
+    def next_ring(self, direction: int = 1):
         if len(self.ring_names) > 1:
-            self.ring_idx = (self.ring_idx + 1) % len(self.ring_names)
+            self.ring_idx = (self.ring_idx + direction) % len(self.ring_names)
             self.hover = -1
             self.spring = [0.0] * len(self.items)
             self._swap = 0.0
@@ -340,12 +363,6 @@ class RadialMenu(QWidget):
             self.cursor_pos = QPointF(pos)
         if h != self.hover:
             self.hover = h
-            if h >= 0:
-                self.hub_armed = True  # visited a petal: hovering the hub may now flip rings
-            if h == -2 and self.hub_armed and len(self.ring_names) > 1:
-                self.hub_timer.start()
-            else:
-                self.hub_timer.stop()
         self.update()
 
     # ------------------------------------------------------------ drag & drop
@@ -526,7 +543,7 @@ class RadialMenu(QWidget):
             top = self.hub_text
             if len(self.ring_names) > 1:
                 other = self.ring_names[(self.ring_idx + 1) % len(self.ring_names)]
-                sub = f"⇧ {other.upper()}"
+                sub = f"⇅ {other.upper()}"   # mouse wheel switches
             else:
                 sub = ring_name.upper()
         f = QFont(ui_family(True))

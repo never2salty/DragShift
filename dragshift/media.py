@@ -149,9 +149,10 @@ def _popen(args: list[str], **kw) -> subprocess.Popen:
                             stdin=subprocess.DEVNULL, creationflags=NO_WINDOW, **kw)
 
 
-def _run_quick(args: list[str], timeout: float = 60) -> subprocess.CompletedProcess:
+def _run_quick(args: list[str], timeout: float = 60, cwd=None) -> subprocess.CompletedProcess:
     return subprocess.run([ffmpeg_exe(), "-hide_banner", "-nostdin", *args], capture_output=True,
-                          stdin=subprocess.DEVNULL, timeout=timeout, creationflags=NO_WINDOW)
+                          stdin=subprocess.DEVNULL, timeout=timeout, creationflags=NO_WINDOW,
+                          cwd=str(cwd) if cwd else None)
 
 
 # ---------------------------------------------------------------- probing
@@ -336,7 +337,7 @@ def _tmp_for(out: Path) -> Path:
     return out.with_name(f".~{out.stem}.part{out.suffix}")
 
 
-def run_ffmpeg(args: list[str], out: Path | None, duration: float | None) -> Path | None:
+def run_ffmpeg(args: list[str], out: Path | None, duration: float | None, cwd=None) -> Path | None:
     """Run FFmpeg writing to a hidden temp file, report progress, rename when done.
     out=None runs an analysis pass that writes nothing (e.g. pass 1 of a 2-pass encode)."""
     if _cancelled():
@@ -344,8 +345,11 @@ def run_ffmpeg(args: list[str], out: Path | None, duration: float | None) -> Pat
     tmp = _tmp_for(out) if out is not None else None
     log = tempfile.TemporaryFile()
     dst = [str(tmp)] if tmp is not None else ["-f", "null", "-"]
+    if cwd is not None and tmp is not None:
+        tmp = tmp.resolve()
+        dst = [str(tmp)]
     proc = _popen(["-y", "-loglevel", "error", "-progress", "pipe:1", "-nostats", *args, *dst],
-                  stdout=subprocess.PIPE, stderr=log)
+                  stdout=subprocess.PIPE, stderr=log, cwd=str(cwd) if cwd else None)
     t0 = time.monotonic()
     last = 0.0
     try:
