@@ -101,7 +101,7 @@ def test_audio_from_mp3_targets(clips):
     assert streams(wav).acodec == "pcm_s16le"  # lossy source → 16-bit is plenty
 
 
-@pytest.mark.parametrize("name", media.VIDEO_TOOLS)
+@pytest.mark.parametrize("name", [n for n in media.VIDEO_TOOLS if n != "Screenshots"] + ["Thumbnail"])
 def test_video_tools(clips, name):
     if name == "1080p":
         with pytest.raises(Exception, match="already"):

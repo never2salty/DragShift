@@ -36,7 +36,7 @@ IPC_NAME = ipc_name()
 GLYPHS = {"Compress": "⇲", "Metadata": "ⓘ", "Redact": "▮", "Crop": "⌗", "Edit": "☼",
           "Annotate": "✎", "Add BG": "▣", "Resize": "⤢", "Split": "✂", "Rotate": "⟳",
           "Merge": "⧉", "Protect": "⚿", "Extract": "⧈",
-          "1080p": "⤓", "720p": "⤓", "Mute": "⊘", "Thumbnail": "▦", "Normalize": "≋", "Trim silence": "⇥",
+          "1080p": "⤓", "720p": "⤓", "Mute": "⊘", "Thumbnail": "▦", "Screenshots": "◎", "Normalize": "≋", "Trim silence": "⇥",
           "Mono": "◉", "Fit size": "⇲", "Repair": "✚", "Simplify": "◇", "Center": "⊕"}
 
 HINTS = {
@@ -46,7 +46,7 @@ HINTS = {
     "Rotate": "Turn pages 90°", "Merge": "Join into one PDF", "Protect": "Add a password",
     "Extract": "Save embedded images",
     "1080p": "Downscale · H.264 MP4", "720p": "Downscale · H.264 MP4", "Mute": "Remove the audio",
-    "Thumbnail": "Save a frame as JPG", "Normalize": "Loudness −14 LUFS", "Trim silence": "Cut start/end silence",
+    "Thumbnail": "Save a frame as JPG", "Screenshots": "Pick frames · save PNG/JPG", "Normalize": "Loudness −14 LUFS", "Trim silence": "Cut start/end silence",
     "Mono": "Stereo → mono",
 }
 VIDEO_HINTS = {"Compress": "Smaller H.264 MP4", "Rotate": "Turn 90° clockwise", "Fit size": "Under 8/16/25 MB…"}
@@ -343,6 +343,13 @@ class DragShiftApp(QObject):
             return
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
+        if cat == "video" and name == "Screenshots":
+            from .framegrab import make_window
+            try:
+                self.open_window(make_window(paths, self.notify))
+            except UserError as e:
+                self.toasts.error("Can't open this video", str(e))
+            return
         if cat == "video" and name == "Fit size":
             from .mediatools import FitSizeWindow
             self.open_window(FitSizeWindow(paths, self.notify))
@@ -836,6 +843,11 @@ def selftest() -> int:
             wav = media.convert(clip, "video", "WAV")[0]
             media.convert(wav, "audio", "FLAC")
             media.fit_size(clip, 200_000)
+            from . import framegrab
+            framegrab.save_frame(clip, 0.5, "PNG")
+            framegrab.save_frame(clip, 0.5, "JPG")
+            assert framegrab.grab_preview(clip, media.probe(clip), 0.5) is not None
+            framegrab.make_window([str(clip)], None).close()
             print("selftest: 3d", flush=True)
             # 3D: mesh formats, preview, STEP through OpenCascade, DXF
             import trimesh

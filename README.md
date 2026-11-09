@@ -8,13 +8,15 @@ Fork von [DragShift](https://github.com/llamaboi55/DragShift) (MIT) mit Video-, 
 
 | Dateien | Umwandeln in | Werkzeuge |
 | --- | --- | --- |
-| **Video** – MOV/QuickTime, MP4, MKV, MXF, AVI, MTS, WebM, ProRes RAW … | MP4 (H.264), H.265, ProRes 422/HQ, MOV/MKV (ohne Neukodierung), WebM, GIF, MP3/WAV | Compress · **Fit size** (8/16/25 MB oder frei, Zwei-Pass) · 1080p · 720p · Rotate · Mute · Thumbnail |
+| **Video** – MOV/QuickTime, MP4, MKV, MXF, AVI, MTS, WebM, ProRes RAW … | MP4 (H.264), H.265, ProRes 422/HQ, MOV/MKV (ohne Neukodierung), WebM, GIF, MP3/WAV | **Screenshots** (Player, framegenau) · Compress · **Fit size** (8/16/25 MB oder frei, Zwei-Pass) · 1080p · 720p · Rotate · Mute · Thumbnail |
 | **Audio** – MP3, WAV, FLAC, M4A, ALAC, OGG, Opus, AIFF, WMA … | MP3 320k, WAV, FLAC, M4A, ALAC, OGG, Opus, AIFF (24 Bit bleibt 24 Bit, Cover & Tags bleiben) | Normalize (−14 LUFS) · Trim silence · Mono |
 | **Bilder** – JPG, PNG, HEIC, WebP, AVIF, TIFF, PSD, **Kamera-RAW** (CR2/CR3, NEF, ARW, DNG, RAF …) | JPG, PNG, WebP, HEIC, AVIF, TIFF, PDF … (Kamera, Datum, GPS bleiben) | Compress (Qualität oder **Zielgröße frei in KB**) · Resize (auch 150 %/200 %) · Crop · Edit · Annotate · Redact · Add BG · Metadata |
 | **3D** – STL, 3MF, OBJ, PLY, GLB, **STEP**, **OpenSCAD** | STL, 3MF, OBJ, PLY, GLB, PNG-Vorschau | Repair · Simplify · Center (auf Druckbett) |
 | **CAD-Zeichnung** – DXF | PDF, PNG, SVG | – |
 | **Adobe** – Premiere .prproj, Illustrator .ai | Premiere: Kopie für ältere Premiere-Versionen · AI: PDF, PNG, JPG, SVG | – |
 | PDF, Word, Text | wie im Original | wie im Original |
+
+**Neu in 1.4: Screenshots aus Videos.** Video ziehen → Shift → *Tools → Screenshots*. Ein kleiner Player öffnet sich: Slider ziehen, ←/→ Bild für Bild, Shift+←/→ eine Sekunde, ±10 s, Abspielen mit 1×–16× (Leertaste), dann **Screenshot** (S oder Enter). Gespeichert wird der exakte Frame in voller Auflösung als PNG oder JPG neben dem Video („Clip 01m23.456s.png“); HDR-Videos (iPhone) werden für das Bild in normale Farben umgerechnet.
 
 **Neu in 1.3**
 - **Drop-Icon:** schwebender Knopf (an/aus im Tray-Menü und in den Einstellungen). Dateien oder Ordner hineinziehen → das Menü öffnet sich direkt daneben. Mit der Maus verschiebbar, Rechtsklick für Verlauf/Einstellungen/Ausblenden.
