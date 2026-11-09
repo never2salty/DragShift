@@ -68,7 +68,7 @@ jobs:
             Get-Content pytest-out.txt | Where-Object { $_ -match '^(FAILED|ERROR) ' } |
               Select-Object -First 25 | ForEach-Object { "::error::$($_ -replace '[\r\n]', ' ')" }
             Get-Content pytest-out.txt | Where-Object { $_ -match '^E  ' } |
-              Select-Object -First 20 | ForEach-Object { "::warning::$($_ -replace '[\r\n]', ' ')" }
+              Select-Object -First 60 | ForEach-Object { "::warning::$($_ -replace '[\r\n]', ' ')" }
             exit $code
           }
         env:
