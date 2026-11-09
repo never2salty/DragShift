@@ -158,7 +158,7 @@ def save_frame(src: str | Path, t: float, fmt: str = "PNG", info: media.Info | N
     out = sibling(src, f"{int(m):02d}m{s:06.3f}s", ".jpg" if fmt == "JPG" else ".png").resolve()
     vf = frame_filter(info, False, grade)
     if fmt == "JPG":
-        vf = vf[: -len("format=rgb24")] + "scale=out_color_matrix=bt709:out_range=pc,format=yuvj444p"
+        vf = vf[: -len("format=rgb24")] + "scale=out_color_matrix=bt601:out_range=pc,format=yuvj444p"  # JFIF = BT.601
         codec = ["-c:v", "mjpeg", "-q:v", "2"]
     else:
         codec = ["-c:v", "png"]

@@ -160,6 +160,8 @@ def test_graded_screenshot(grey_clip, invert_lut):
     conv = framegrab.save_frame(grey_clip, 1.0, "JPG", grade=G.Grade(profile="slog3cine", lut=G.BUILTIN))
     c = center(conv)
     assert 105 < c[0] < 140 and np.ptp(c) <= 4          # ~48 % neutral grey after conversion
+    plain_jpg = framegrab.save_frame(grey_clip, 1.0, "JPG")
+    assert np.ptp(center(plain_jpg)) <= 3 and abs(int(center(plain_jpg)[0]) - int(a[0])) <= 3   # no colour cast
 
 
 def test_export_graded(grey_clip, warm_lut):
