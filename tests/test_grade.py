@@ -135,16 +135,23 @@ def test_presets_and_recent(warm_lut, invert_lut):
 # ---------------------------------------------------------------- FFmpeg side
 @pytest.fixture(scope="module")
 def grey_clip(tmp_path_factory):
-    """S-Log3-ish flat grey clip with sound: luma 41 % ≈ 18 % grey in S-Log3."""
+    """Flat grey clip with sound, built from exact raw YUV (Y = 41 % ≈ 18 % grey in S-Log3, U = V = 128)
+    and encoded losslessly, so no FFmpeg version can tint it."""
     if FF is None:
         pytest.skip("FFmpeg not available")
     d = tmp_path_factory.mktemp("g")
     p = d / "C0001.MP4"
     y = int(round(16 + 0.4106 * 219))
-    subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"color=c=0x{y:02x}{y:02x}{y:02x}:s=1920x1080:r=25:d=3",
-                    "-f", "lavfi", "-i", "sine=d=3", "-vf", f"format=yuv420p,geq=lum={y}:cb=128:cr=128", "-c:v", "libx264",
-                    "-crf", "4", "-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709",
-                    "-color_trc", "bt709", "-c:a", "aac", str(p)], check=True)
+    w, h, n = 1920, 1080, 75
+    frame = bytes([y]) * (w * h) + bytes([128]) * (w * h // 2)
+    proc = subprocess.Popen([FF, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", f"{w}x{h}",
+                             "-r", "25", "-i", "-", "-f", "lavfi", "-i", "sine=d=3", "-map", "0:v", "-map", "1:a",
+                             "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", "-colorspace", "bt709",
+                             "-c:a", "aac", "-shortest", str(p)], stdin=subprocess.PIPE)
+    for _ in range(n):
+        proc.stdin.write(frame)
+    proc.stdin.close()
+    assert proc.wait() == 0
     return p
 
 
