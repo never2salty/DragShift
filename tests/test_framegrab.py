@@ -32,7 +32,7 @@ def clip(tmp_path_factory):
     p = d / "Interview.mov"
     # drawbox brightness = frame number * 2 → readable back from the pixel
     subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=1920x1080:r=25:d=4",
-                    "-vf", "geq=lum='if(lt(X,200)*lt(Y,200),16+N*2,128)':cb=128:cr=128",
+                    "-vf", "format=yuv420p,geq=lum='if(lt(X,200)*lt(Y,200),16+N*2,128)':cb=128:cr=128",
                     "-c:v", "libx264", "-g", "50", "-crf", "1", "-pix_fmt", "yuv420p", str(p)], check=True)
     return p
 
