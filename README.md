@@ -4,6 +4,12 @@ Fork von [DragShift](https://github.com/llamaboi55/DragShift) (MIT) mit Video-, 
 
 **Download (Windows):** [neuestes Release](../../releases/latest) → **DragShift-Setup.exe** (empfohlen) oder die portable **DragShift.exe**. SmartScreen warnt, weil die App nicht signiert ist: *Weitere Informationen → Trotzdem ausführen*. FFmpeg und OpenSCAD sind enthalten.
 
+**Download (Mac, macOS 11+, Apple Silicon und Intel):** im Terminal einfügen – installiert nach „Programme“, ohne Sicherheitswarnung:
+```
+curl -fsSL https://raw.githubusercontent.com/never2salty/DragShift/main/install-mac.sh | bash
+```
+Oder im [Release](../../releases/latest) **DragShift-mac-apple-silicon.dmg** (M1–M4) bzw. **DragShift-mac-intel.dmg** laden, öffnen und DragShift in „Programme“ ziehen; beim ersten Start *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*. DragShift erscheint oben in der Menüleiste; Updates gehen danach über *Check for updates…*. FFmpeg ist enthalten; für .scad-Dateien OpenSCAD von openscad.org installieren.
+
 ## Was diese Version kann
 
 | Dateien | Umwandeln in | Werkzeuge |

@@ -52,6 +52,9 @@ def openscad_exe() -> str:
             if os.environ.get(env):
                 cands.append(Path(os.environ[env]) / "OpenSCAD" / name)
                 cands.append(Path(os.environ[env]) / "Programs" / "OpenSCAD" / name)
+    if sys.platform == "darwin":
+        cands += [Path("/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"),
+                  Path.home() / "Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"]
     for c in cands:
         if c.is_file():
             return str(c)

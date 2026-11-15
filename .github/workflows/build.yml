@@ -1,4 +1,4 @@
-name: Build Windows app
+name: Build Windows + Mac app
 
 on:
   push:
@@ -139,15 +139,106 @@ jobs:
             dist/DragShift.exe
             dist/DragShift-Setup.exe
 
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: apple-silicon
+          - runner: macos-15-intel
+            arch: intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pytest
+
+      - name: Bundle FFmpeg (static build from imageio-ffmpeg)
+        run: |
+          mkdir -p ffmpeg-bin
+          FF=$(python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")
+          cp "$FF" ffmpeg-bin/ffmpeg
+          chmod +x ffmpeg-bin/ffmpeg
+          ffmpeg-bin/ffmpeg -hide_banner -version | head -1
+          ffmpeg-bin/ffmpeg -hide_banner -encoders | grep -E "libx264|libx265|prores_ks|libmp3lame|libopus|libvorbis|libvpx-vp9|h264_videotoolbox|hevc_videotoolbox" || true
+          ffmpeg-bin/ffmpeg -hide_banner -filters | grep -E " zscale | lut3d | tonemap " || true
+          echo "DRAGSHIFT_FFMPEG=$PWD/ffmpeg-bin/ffmpeg" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          set -o pipefail
+          python -m pytest tests -q -rfE -p no:cacheprovider 2>&1 | tee pytest-out.txt || {
+            grep -E '^(FAILED|ERROR) ' pytest-out.txt | head -25 | sed 's/^/::error::/'
+            grep -E '^E  ' pytest-out.txt | head -20 | sed 's/^/::warning::/'
+            exit 1; }
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - name: Build DragShift.app
+        run: pyinstaller DragShift.spec --noconfirm
+
+      - name: Self-test the app bundle (bundled FFmpeg only)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          unset DRAGSHIFT_FFMPEG
+          python - <<'PY'
+          import subprocess, sys, pathlib
+          try:
+              r = subprocess.run(["dist/DragShift.app/Contents/MacOS/DragShift", "--selftest"], timeout=420)
+          except subprocess.TimeoutExpired:
+              print("::error::self-test timed out"); sys.exit(1)
+          log = pathlib.Path.home() / "Library/Application Support/DragShift/log.txt"
+          if log.exists():
+              print("\n".join(log.read_text(errors="replace").splitlines()[-15:]))
+          sys.exit(r.returncode)
+          PY
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" dist/DragShift.app/Contents/Info.plist
+          du -sh dist/DragShift.app
+
+      - name: Make the .dmg (drag DragShift to Applications)
+        run: |
+          mkdir -p dmg
+          cp -R dist/DragShift.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "DragShift" -srcfolder dmg -ov -format UDZO "dist/DragShift-mac-${{ matrix.arch }}.dmg"
+          du -h "dist/DragShift-mac-${{ matrix.arch }}.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ matrix.arch }}
+          path: dist/DragShift-mac-${{ matrix.arch }}.dmg
+
+  publish:
+    needs: [windows, macos]
+    if: always() && github.event_name == 'push' && needs.windows.result == 'success' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
       - name: Read version
         id: ver
-        shell: pwsh
         run: |
-          $v = (Select-String -Path dragshift\__init__.py -Pattern '"([\d.]+)"').Matches[0].Groups[1].Value
-          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          ls -la out
+          echo "version=$(python3 -c "import re;print(re.search(r'\"([\d.]+)\"', open('dragshift/__init__.py').read())[1])")" >> $GITHUB_OUTPUT
+          if ls out/*.dmg >/dev/null 2>&1; then echo "mac=1" >> $GITHUB_OUTPUT; fi
 
-      - name: Publish release (main branch and v* tags)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.ver.outputs.version) }}
@@ -155,10 +246,18 @@ jobs:
           name: DragShift ${{ steps.ver.outputs.version }}
           make_latest: true
           body: |
+            ### Windows
             **DragShift-Setup.exe** installieren (für den eigenen Benutzer, keine Adminrechte) – oder **DragShift.exe** portabel starten.
-            Windows SmartScreen warnt, weil die App nicht signiert ist: *Weitere Informationen → Trotzdem ausführen*.
+            SmartScreen warnt, weil die App nicht signiert ist: *Weitere Informationen → Trotzdem ausführen*.
 
-            Neu in 1.6: ein Player-Fenster mit Dateiliste und Vorschaubildern (Ordner/Dateien reinziehen), Trimmen mit In/Out, Loop und exaktem oder schnellem Schnitt – auch für WAV/MP3 mit Wellenform, Werte eintippen, Startkreis per Klick aufs Drop-Icon.
-          files: |
-            dist/DragShift.exe
-            dist/DragShift-Setup.exe
+            ### Mac (macOS 11 oder neuer)
+            Am einfachsten – ohne Sicherheitswarnung – im **Terminal** einfügen:
+            ```
+            curl -fsSL https://raw.githubusercontent.com/never2salty/DragShift/main/install-mac.sh | bash
+            ```
+            Oder herunterladen: **DragShift-mac-apple-silicon.dmg** (M1–M4) bzw. **DragShift-mac-intel.dmg**, öffnen und DragShift in „Programme“ ziehen.
+            Beim ersten Start meldet macOS, dass die App nicht geprüft werden kann: einmal **Fertig** klicken, dann *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*. Oder im Terminal: `xattr -dr com.apple.quarantine /Applications/DragShift.app`
+            DragShift sitzt dann oben in der Menüleiste.
+
+            Neu in 1.7: Mac-Version (Apple Silicon + Intel) mit Update direkt im Programm.
+          files: out/*

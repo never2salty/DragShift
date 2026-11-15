@@ -357,3 +357,13 @@ def test_tray_double_click_summons_drop_circle(qapp, monkeypatch):
     assert calls == []
     appmod.DragShiftApp._tray_click(fake, QSystemTrayIcon.DoubleClick)
     assert calls == ["summon"]
+
+
+
+def test_mac_update_script(tmp_path):
+    sh = updater.mac_update_script(Path("/tmp/DragShift-9.dmg"), Path("/Applications/DragShift.app"), 4242)
+    assert "kill -0 4242" in sh and "hdiutil attach '/tmp/DragShift-9.dmg'" in sh
+    assert "ditto \"$MNT/DragShift.app\" '/Applications/DragShift.app'" in sh and "open '/Applications/DragShift.app'" in sh
+    odd = updater.mac_update_script(Path("/tmp/x.dmg"), Path("/Users/dan's/DragShift.app"), 1)
+    assert "'/Users/dan'\\''s/DragShift.app'" in odd
+    assert updater.mac_asset_name() in ("dragshift-mac-apple-silicon.dmg", "dragshift-mac-intel.dmg")

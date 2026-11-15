@@ -24,6 +24,7 @@ from .util import UserError
 REPO = "never2salty/DragShift"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
 IS_WIN = sys.platform == "win32"
+IS_MAC = sys.platform == "darwin"
 NO_WINDOW = 0x08000000 if IS_WIN else 0
 DETACHED = 0x00000008 if IS_WIN else 0
 
@@ -35,6 +36,7 @@ class Release:
     setup_url: str | None
     portable_url: str | None
     page: str
+    mac_url: str | None = None          # the .dmg for this Mac's chip
 
 
 def parse_version(v: str) -> tuple[int, ...]:
@@ -74,7 +76,23 @@ def latest() -> Release:
     assets = {a["name"].lower(): a["browser_download_url"] for a in data.get("assets", [])}
     return Release(version=data.get("tag_name", "").lstrip("v"), notes=data.get("body") or "",
                    setup_url=assets.get("dragshift-setup.exe"), portable_url=assets.get("dragshift.exe"),
-                   page=data.get("html_url", f"https://github.com/{REPO}/releases"))
+                   page=data.get("html_url", f"https://github.com/{REPO}/releases"),
+                   mac_url=assets.get(mac_asset_name()))
+
+
+def mac_asset_name() -> str:
+    import platform
+    return "dragshift-mac-apple-silicon.dmg" if platform.machine() == "arm64" else "dragshift-mac-intel.dmg"
+
+
+def mac_app_bundle() -> Path | None:
+    """…/DragShift.app of the running frozen app on macOS."""
+    if not (IS_MAC and getattr(sys, "frozen", False)):
+        return None
+    for p in Path(sys.executable).resolve().parents:
+        if p.suffix == ".app":
+            return p
+    return None
 
 
 def is_installed() -> bool:
@@ -86,6 +104,8 @@ def is_installed() -> bool:
 
 
 def can_self_update() -> bool:
+    if IS_MAC:
+        return mac_app_bundle() is not None
     return IS_WIN and getattr(sys, "frozen", False)
 
 
@@ -118,10 +138,16 @@ def fetch_update(rel: Release) -> Path:
     """Download what this copy needs (installer or portable exe). Runs in a worker thread."""
     from . import media
     if not can_self_update():
-        raise UserError("Automatic updates work in the Windows app. Running from source: git pull instead.")
+        raise UserError("Automatic updates work in the installed app. Running from source: git pull instead.")
 
     def progress(frac):
         media._report(frac)
+
+    if IS_MAC:
+        if not rel.mac_url:
+            raise UserError("This release has no Mac download for this chip yet.")
+        dest = Path(tempfile.gettempdir()) / f"DragShift-{rel.version}.dmg"
+        return download(rel.mac_url, dest, progress, media._cancelled)
 
     if is_installed():
         if not rel.setup_url:
@@ -134,8 +160,34 @@ def fetch_update(rel: Release) -> Path:
     return download(rel.portable_url, dest, progress, media._cancelled)
 
 
+def mac_update_script(dmg: Path, app: Path, pid: int) -> str:
+    """Shell script: wait for DragShift to quit, swap DragShift.app from the .dmg, open it again."""
+    q = lambda p: "'" + str(p).replace("'", "'\\''") + "'"  # noqa: E731
+    return f"""#!/bin/bash
+# DragShift update: replace the app bundle once the running copy has quit
+while kill -0 {pid} 2>/dev/null; do sleep 0.3; done
+MNT=$(mktemp -d)
+hdiutil attach {q(dmg)} -mountpoint "$MNT" -nobrowse -quiet || exit 1
+rm -rf {q(app)}.old
+mv {q(app)} {q(app)}.old && ditto "$MNT/DragShift.app" {q(app)} && rm -rf {q(app)}.old || mv {q(app)}.old {q(app)}
+xattr -dr com.apple.quarantine {q(app)} 2>/dev/null
+hdiutil detach "$MNT" -quiet
+rm -f {q(dmg)}
+open {q(app)}
+rm -f "$0"
+"""
+
+
 def apply_update(downloaded: Path) -> None:
     """Start the swap/installer, then the caller quits the app."""
+    if IS_MAC:
+        app = mac_app_bundle()
+        script = Path(tempfile.gettempdir()) / "dragshift-update.sh"
+        script.write_text(mac_update_script(downloaded, app, os.getpid()), encoding="utf-8")
+        script.chmod(0o755)
+        subprocess.Popen(["/bin/bash", str(script)], start_new_session=True, close_fds=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return
     if is_installed():
         subprocess.Popen([str(downloaded), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
                           "/CLOSEAPPLICATIONS", "/LAUNCH"], creationflags=DETACHED, close_fds=True)
