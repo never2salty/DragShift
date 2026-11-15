@@ -64,6 +64,9 @@ def window_number(widget) -> int:
     if not OK:
         return 0
     try:
+        from PySide6.QtGui import QGuiApplication
+        if QGuiApplication.platformName() != "cocoa":   # offscreen/minimal QPA: winId() isn't an NSView
+            return 0
         import objc
         view = objc.objc_object(c_void_p=int(widget.winId()))
         win = view.window()

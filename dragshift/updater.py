@@ -162,7 +162,7 @@ def fetch_update(rel: Release) -> Path:
 
 def mac_update_script(dmg: Path, app: Path, pid: int) -> str:
     """Shell script: wait for DragShift to quit, swap DragShift.app from the .dmg, open it again."""
-    q = lambda p: "'" + str(p).replace("'", "'\\''") + "'"  # noqa: E731
+    q = lambda p: "'" + (p.as_posix() if hasattr(p, "as_posix") else str(p)).replace("'", "'\\''") + "'"  # noqa: E731
     return f"""#!/bin/bash
 # DragShift update: replace the app bundle once the running copy has quit
 while kill -0 {pid} 2>/dev/null; do sleep 0.3; done
