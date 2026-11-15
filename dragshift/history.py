@@ -22,7 +22,9 @@ _LOCK = threading.Lock()
 
 
 def history_path() -> Path:
-    if sys.platform == "darwin":
+    if os.environ.get("DRAGSHIFT_DATA"):            # tests / portable setups
+        base = Path(os.environ["DRAGSHIFT_DATA"])
+    elif sys.platform == "darwin":
         base = Path.home() / "Library" / "Application Support" / "DragShift"
     else:
         base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".local" / "share") / "DragShift"
