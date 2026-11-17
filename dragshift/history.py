@@ -22,14 +22,8 @@ _LOCK = threading.Lock()
 
 
 def history_path() -> Path:
-    if os.environ.get("DRAGSHIFT_DATA"):            # tests / portable setups
-        base = Path(os.environ["DRAGSHIFT_DATA"])
-    elif sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support" / "DragShift"
-    else:
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".local" / "share") / "DragShift"
-    base.mkdir(parents=True, exist_ok=True)
-    return base / "history.json"
+    from .util import data_dir
+    return data_dir() / "history.json"
 
 
 def load() -> list[dict]:

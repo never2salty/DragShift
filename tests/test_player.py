@@ -191,4 +191,4 @@ def test_folder_ring_offers_player(qapp, shoot):
     from dragshift.app import DragShiftApp
     rings = DragShiftApp.build_rings(None, [str(shoot)])
     keys = [i.key for i in rings["Folder"]]
-    assert keys == ["bulk:all", "player:player", "player:trim"]
+    assert keys == ["bulk:all", "player:player", "player:trim", "icons:icons"]

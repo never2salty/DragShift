@@ -69,12 +69,13 @@ if IS_MAC:
         info_plist={
             "CFBundleName": "DragShift",
             "CFBundleDisplayName": "DragShift",
-            "CFBundleShortVersionString": "1.7.0",
-            "CFBundleVersion": "1.7.0",
+            "CFBundleShortVersionString": "1.8.0",
+            "CFBundleVersion": "1.8.0",
             "LSUIElement": True,                 # menu-bar app, no Dock icon
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,
             "NSRequiresAquaSystemAppearance": False,
+            "NSMicrophoneUsageDescription": "DragShift records your voice with screen recordings when you pick a microphone.",
             # show up in Finder's "Open With" for any file, and accept drops on the app icon
             "CFBundleDocumentTypes": [{
                 "CFBundleTypeName": "Any file",

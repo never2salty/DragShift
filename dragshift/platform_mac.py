@@ -190,3 +190,29 @@ def drag_files() -> list[str]:
         return [p for p in out if os.path.exists(p)]
     except Exception:
         return []
+
+
+# ---------------------------------------------------------------- Finder icons / capture exclusion
+def set_file_icon(path, png) -> bool:
+    """Custom Finder icon for a file or folder (png=None removes it)."""
+    if not OK:
+        return False
+    img = AppKit.NSImage.alloc().initWithContentsOfFile_(str(png)) if png else None
+    return bool(AppKit.NSWorkspace.sharedWorkspace().setIcon_forFile_options_(img, str(path), 0))
+
+
+def exclude_from_capture(widget) -> None:
+    """Keep a window (recording frame, control bar) out of screen recordings."""
+    if not OK:
+        return
+    try:
+        from PySide6.QtGui import QGuiApplication
+        if QGuiApplication.platformName() != "cocoa":
+            return
+        import objc
+        view = objc.objc_object(c_void_p=int(widget.winId()))
+        win = view.window()
+        if win is not None:
+            win.setSharingType_(0)        # NSWindowSharingNone
+    except Exception:
+        pass

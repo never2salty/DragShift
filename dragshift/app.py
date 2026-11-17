@@ -210,6 +210,13 @@ class DragShiftApp(QObject):
         m.addAction("Convert a folder…", self.open_folder_dialog)
         m.addAction("Player / Trim…", lambda: self.open_player([], "player"))
         m.addAction("History…", self.open_history)
+        m.addSeparator()
+        self.act_shot = m.addAction("Screenshot → editor", self.shot_editor)
+        self.act_clip = m.addAction("Screenshot → clipboard", self.shot_clipboard)
+        self.act_full = m.addAction("Whole screen → editor", self.shot_fullscreen)
+        self.act_rec = m.addAction("Record screen…", self.record_toggle)
+        m.addAction("Virus scan…", lambda: self.open_scan([]))
+        m.addAction("Folder icons…", lambda: self.open_folder_icons([]))
         self.act_drop = QAction("Show drop icon", m, checkable=True, checked=self.settings.get("drop_icon"))
         self.act_drop.toggled.connect(self.set_drop_icon)
         m.addAction(self.act_drop)
@@ -224,6 +231,15 @@ class DragShiftApp(QObject):
         self.tray.setContextMenu(m)
         self.tray.activated.connect(self._tray_click)
         self.tray.show()
+
+        # screenshots / recording
+        from .capture import CardStack
+        from .hotkeys import HotkeyManager
+        self.cards = CardStack()
+        self.picker = None
+        self.recorder = None
+        self.hotkeys = HotkeyManager(self)
+        QTimer.singleShot(0, lambda: self.register_hotkeys(warn=True))
 
         # floating drop icon
         self.drop_icon: DropIcon | None = None
@@ -309,10 +325,14 @@ class DragShiftApp(QObject):
             if media_files:
                 items += [Item("Player", "◎", key="player:player", hint=f"{len(media_files)} videos/audio · screenshots"),
                           Item("Trim", "✂", key="player:trim", hint="Pick a file · set In / Out")]
+            if n_dirs:
+                items.append(Item("Folder icon", "▰", key="icons:icons", hint="Colour · symbol · your picture"))
             return {"Folder": items}
         cat = category(paths[0])
         if cat is None:
             return {"Unsupported": []}
+        if cat == "program":
+            return {"Check": [Item("Virus scan", "⛨", key="scan:scan", hint="Defender + VirusTotal")]}
         ext = Path(paths[0]).suffix
         same = [p for p in paths if category(p) == cat]
         convert_items = []
@@ -351,6 +371,12 @@ class DragShiftApp(QObject):
             return
         if kind == "player":
             self.open_player(paths, name)
+            return
+        if kind == "scan":
+            self.open_scan(paths)
+            return
+        if kind == "icons":
+            self.open_folder_icons([p for p in paths if os.path.isdir(p)])
             return
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
@@ -551,6 +577,10 @@ class DragShiftApp(QObject):
                    ("Trim", "✂", "start:trim", "Video or audio · In / Out"),
                    ("Convert", "⇄", "start:file", "Pick a file"),
                    ("Folder", "⧉", "start:folder", "Convert a whole folder"),
+                   ("Screenshot", "⌗", "start:shot", "Area → draw · copy"),
+                   ("Record", "●", "start:record", "Video or GIF"),
+                   ("Scan", "⛨", "start:scan", "Virus check"),
+                   ("Icons", "▰", "start:icons", "Folder icons"),
                    ("History", "↺", "start:history", "What you converted"),
                    ("Settings", "⚙", "start:settings", "")]
 
@@ -583,6 +613,14 @@ class DragShiftApp(QObject):
             self.open_history()
         elif k == "settings":
             self.open_settings()
+        elif k == "shot":
+            QTimer.singleShot(250, self.shot_editor)        # let the menu fade out of the picture
+        elif k == "record":
+            QTimer.singleShot(250, self.record_toggle)
+        elif k == "scan":
+            self.open_scan([])
+        elif k == "icons":
+            self.open_folder_icons([])
 
     def open_folder_dialog(self):
         d = QFileDialog.getExistingDirectory(None, "Choose a folder to convert", QDir.homePath())
@@ -741,6 +779,14 @@ class DragShiftApp(QObject):
     def open_settings(self):
         w = SettingsWindow(self.settings, check_updates=lambda: self.check_updates(manual=True))
         w.changed.connect(self._settings_changed)
+        # pause the global shortcuts so they can be typed into the shortcut fields
+        self._hotkeys_paused = True
+        self.hotkeys.clear()
+
+        def resume(*_):
+            self._hotkeys_paused = False
+            self.register_hotkeys(warn=True)
+        w.destroyed.connect(resume)
         self.open_window(w)
 
     def _settings_changed(self):
@@ -749,6 +795,149 @@ class DragShiftApp(QObject):
             self.set_drop_icon(on)
         self.watcher.set_key(self.settings.get("trigger"))
         self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file · double-click: drop circle")
+        if not getattr(self, "_hotkeys_paused", False):
+            self.register_hotkeys(warn=True)
+
+    # ------------------------------------------------------------ screenshots, recording, scan, icons
+    HOTKEYS = [("hk_area_clip", "shot_clipboard", "act_clip"), ("hk_area_edit", "shot_editor", "act_shot"),
+               ("hk_full_edit", "shot_fullscreen", "act_full"), ("hk_record", "record_toggle", "act_rec")]
+
+    def register_hotkeys(self, warn: bool = False) -> list[str]:
+        self.hotkeys.clear()
+        taken = []
+        for key, fn, act in self.HOTKEYS:
+            seq = self.settings.get(key)
+            if hasattr(self, act):
+                getattr(self, act).setShortcut(seq or "")
+                getattr(self, act).setShortcutVisibleInContextMenu(True)
+            if seq and self.hotkeys.supported and not self.hotkeys.register(seq, getattr(self, fn)):
+                taken.append(seq)
+        if taken and warn:
+            self.toasts.error("Shortcut already in use", f"{', '.join(taken)} belongs to another app. "
+                              "Pick another one in Settings → Capture.")
+        return taken
+
+    def _pick(self, on_pick, hint=None):
+        if self.picker is not None:
+            return
+        from .capture import AreaPicker
+        self.picker = AreaPicker(hint) if hint else AreaPicker()
+
+        def picked(screen, rect, pm):
+            self.picker = None
+            on_pick(screen, rect, pm)
+
+        def cancelled():
+            self.picker = None
+        self.picker.picked.connect(picked)
+        self.picker.cancelled.connect(cancelled)
+        self.picker.start()
+
+    def open_editor(self, img):
+        from .snapeditor import SnapEditor
+        w = SnapEditor(img, self.settings)
+        w.saved.connect(lambda p: self.toasts.info("Screenshot saved · copied", str(Path(p).name), 3500))
+        self.open_window(w)
+        return w
+
+    def shot_editor(self):
+        from .capture import crop_pixmap
+        self._pick(lambda screen, rect, pm: self.open_editor(crop_pixmap(pm, rect)))
+
+    def shot_fullscreen(self):
+        from .capture import grab_screen
+        scr = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        img = grab_screen(scr).toImage()
+        img.setDevicePixelRatio(scr.devicePixelRatio())
+        self.open_editor(img)
+
+    def shot_clipboard(self):
+        from .capture import crop_pixmap
+        self._pick(lambda screen, rect, pm: self.clip_image(crop_pixmap(pm, rect)))
+
+    def clip_image(self, img):
+        from . import capture
+        flat = img.copy()
+        flat.setDevicePixelRatio(1)
+        QGuiApplication.clipboard().setImage(flat)
+        state = {"path": None}
+
+        def save() -> Path:
+            if state["path"] is None:
+                d = capture.capture_dir(self.settings.get("capture_dir"))
+                state["path"] = capture.unique(d, capture.format_name(self.settings.get("capture_name")), ".png")
+                flat.save(str(state["path"]))
+            return state["path"]
+        if self.settings.get("save_clip_shots"):
+            save()
+
+        def saved_toast():
+            p = save()
+            self.toasts.info("Screenshot saved", p.name, 3000)
+        card = capture.CaptureCard(flat, "Copied ✓  " + capture.image_caption(flat), "",
+                                   [("Edit", lambda: self.open_editor(img)), ("Save", saved_toast)],
+                                   path_fn=save, image=flat)
+        self.cards.add(card)
+
+    def record_toggle(self):
+        if self.recorder is not None:
+            if self.recorder.recording:
+                self.recorder.stop()
+            return
+        from .recorder import RecorderUI
+
+        def picked(screen, rect, _pm):
+            ui = RecorderUI(screen, rect, self.settings)
+            self.recorder = ui
+            ui.finished.connect(self._recorded)
+            ui.failed.connect(lambda m: self.toasts.error("Recording failed", m))
+            ui.closed.connect(lambda: setattr(self, "recorder", None))
+        self._pick(picked, "Drag the area to record · click = whole screen · Esc = cancel")
+
+    def _recorded(self, path, secs, gif):
+        from . import capture
+        from .framegrab import thumbnail_image
+        from .toasts import open_file, reveal
+        thumb = thumbnail_image(path, w=540)
+        actions = [("Open", lambda: open_file(path))]
+        if not gif:
+            actions.append(("Trim", lambda: self.open_player([str(path)], "trim")))
+        actions.append(("Folder", lambda: reveal(path)))
+        card = capture.CaptureCard(thumb, capture.video_caption(path, secs), "GIF" if gif else "MP4", actions,
+                                   path_fn=lambda: path)
+        self.cards.add(card)
+        self.remember_capture(path)
+
+    def remember_capture(self, path):
+        try:
+            from .report import Result
+            self.remember(Result("Screen recording", Path(path).name, [Path(path)]))
+        except Exception:
+            pass
+
+    def open_scan(self, paths):
+        from .virusscan import ScanWindow
+        for w in self.windows:
+            if w.__class__.__name__ == "ScanWindow" and w.isVisible():
+                w.add_paths(paths)
+                w.raise_()
+                w.activateWindow()
+                return w
+        w = ScanWindow(paths, self.settings)
+        self.open_window(w)
+        return w
+
+    def open_folder_icons(self, folders):
+        from .foldericons import FolderIconWindow
+        for w in self.windows:
+            if isinstance(w, FolderIconWindow) and w.isVisible():
+                w.set_targets(w.targets + [Path(f) for f in folders])
+                w.raise_()
+                w.activateWindow()
+                return w
+        w = FolderIconWindow(folders)
+        self.open_window(w)
+        return w
 
     def show_welcome(self):
         self.open_window(WelcomeWindow(self.settings, self.trigger_label()))
@@ -976,6 +1165,24 @@ def selftest() -> int:
             bulk.BulkWindow([d], lambda *a, **k: None).close()
             DropIcon().close()
             assert updater.newer("99.0") and not updater.newer("0.1")
+            print("selftest: capture/scan/icons", flush=True)
+            from . import capture, foldericons, recorder, snapeditor, virusscan
+            from .hotkeys import HotkeyManager, win_combo
+            assert win_combo("Ctrl+Shift+1") is not None
+            HotkeyManager().clear()
+            foldericons.write_ico(foldericons.render_folder("#3ea6ff", "star"), Path(d) / "f.ico")
+            foldericons.FolderIconWindow([d]).close()
+            virusscan.sha256(src)
+            print(f"defender: {virusscan.defender_exe()}")
+            virusscan.ScanWindow([]).close()
+            from PySide6.QtGui import QImage as _QI
+            shot = _QI(str(src))
+            snapeditor.flatten(shot, [])
+            snapeditor.SnapEditor(shot).close()
+            capture.format_name(None)
+            gif = Path(d) / "c.gif"
+            subprocess.run(recorder.gif_args(ff, clip, gif), check=True, creationflags=media.NO_WINDOW)
+            assert gif.stat().st_size > 0
             check_text_renders()
         print("SELFTEST OK")
         return 0

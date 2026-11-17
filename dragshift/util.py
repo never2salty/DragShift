@@ -27,6 +27,23 @@ DOCX_EXTS = {".docx"}
 TEXT_EXTS = {".txt", ".md", ".csv", ".log", ".json", ".xml", ".html", ".htm"}
 
 
+def data_dir() -> Path:
+    """Where DragShift keeps history, grades, icons… (DRAGSHIFT_DATA overrides, for tests)."""
+    import sys
+    if os.environ.get("DRAGSHIFT_DATA"):
+        base = Path(os.environ["DRAGSHIFT_DATA"])
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support" / "DragShift"
+    else:
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".local" / "share") / "DragShift"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+PROGRAM_EXTS = {".exe", ".msi", ".msix", ".appx", ".dll", ".scr", ".com", ".bat", ".cmd", ".ps1", ".vbs",
+                ".js", ".jar", ".apk", ".dmg", ".pkg", ".app", ".zip", ".rar", ".7z", ".iso", ".sys"}
+
+
 def category(path: str | Path) -> str | None:
     ext = Path(path).suffix.lower()
     if ext in IMAGE_EXTS:
@@ -49,6 +66,8 @@ def category(path: str | Path) -> str | None:
         return "docx"
     if ext in TEXT_EXTS:
         return "text"
+    if ext in PROGRAM_EXTS:
+        return "program"
     return None
 
 

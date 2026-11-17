@@ -33,7 +33,7 @@ def scan(roots: list[Path], recursive: bool) -> tuple["OrderedDict[str, list[Pat
         nonlocal other, n
         if p.name.startswith(".~") or p.name.startswith("."):
             return
-        if category(p) is None:
+        if category(p) in (None, "program"):
             other += 1
             return
         groups.setdefault(p.suffix.lower(), []).append(p)

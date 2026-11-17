@@ -171,6 +171,15 @@ QScrollBar:vertical {{ background: transparent; width: 8px; }}
 QScrollBar::handle:vertical {{ background: rgba(255,255,255,0.3); border-radius: 4px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 QToolTip {{ background: #2a2438; color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 4px; }}
+QTabWidget::pane {{ border: none; }}
+QTabBar {{ qproperty-drawBase: 0; }}
+QTabBar::tab {{ background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.22); border-radius: 12px;
+  padding: 5px 16px; margin-right: 6px; }}
+QTabBar::tab:hover {{ background: rgba(255,255,255,0.18); }}
+QTabBar::tab:selected {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 rgba(255,138,92,0.85), stop:1 rgba(255,79,139,0.85));
+  border: 1px solid rgba(255,255,255,0.55); }}
+QKeySequenceEdit QLineEdit {{ min-height: 20px; }}
+QScrollArea {{ background: transparent; border: none; }}
 QMenu {{ background: #2a2438; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 4px; }}
 QMenu::item {{ padding: 6px 18px; border-radius: 5px; }}
 QMenu::item:selected {{ background: rgba(255,255,255,0.15); }}

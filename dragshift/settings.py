@@ -4,8 +4,8 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import QSettings, Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QGridLayout, QHBoxLayout, QLabel,
-                               QPushButton, QSlider, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QKeySequenceEdit,
+                               QLabel, QLineEdit, QPushButton, QSlider, QTabWidget, QVBoxLayout, QWidget)
 
 from . import __version__
 from .util import CONFIG
@@ -30,6 +30,19 @@ DEFAULTS = {
     "history": True,
     "auto_update": True,
     "last_update_check": "0",
+    # capture
+    "hk_area_clip": "Ctrl+Shift+1",
+    "hk_area_edit": "Ctrl+Shift+2",
+    "hk_full_edit": "Ctrl+Shift+3",
+    "hk_record": "Ctrl+Shift+5",
+    "capture_dir": "",
+    "capture_name": "DragShift %Y-%m-%d at %H.%M.%S",
+    "save_clip_shots": False,
+    "rec_mic": "",
+    "rec_fps": 30,
+    "rec_cursor": True,
+    # security
+    "vt_key": "",
 }
 
 
@@ -116,8 +129,13 @@ class SettingsWindow(GlassWindow):
     changed = Signal()
 
     def __init__(self, settings: Settings, check_updates=None):
-        super().__init__("Settings", size=(560, 700))
+        super().__init__("Settings", size=(600, 720))
         self.s = settings
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        general = QWidget()
+        gl = QVBoxLayout(general)
+        gl.setContentsMargins(4, 12, 4, 4)
         grid = QGridLayout()
         grid.setHorizontalSpacing(14)
         grid.setVerticalSpacing(12)
@@ -217,8 +235,12 @@ class SettingsWindow(GlassWindow):
                 glass_btn.clicked.connect(platform_mac.request_screen_recording)
                 grid.addWidget(glass_btn, r, 1)
                 r += 1
-        self.body.addLayout(grid)
-        self.body.addStretch(1)
+        gl.addLayout(grid)
+        gl.addStretch(1)
+        self.tabs.addTab(general, "General")
+        self.tabs.addTab(self._capture_tab(), "Capture")
+        self.tabs.addTab(self._security_tab(), "Security")
+        self.body.addWidget(self.tabs, 1)
         about = QLabel(f"DragShift {__version__}  ·  originals are never modified")
         about.setObjectName("dim")
         foot = QHBoxLayout()
@@ -233,6 +255,181 @@ class SettingsWindow(GlassWindow):
     def _save(self, key, value):
         self.s.set(key, value)
         self.changed.emit()
+
+    # ---- Capture
+    SHORTCUTS = [("hk_area_clip", "Area → clipboard"), ("hk_area_edit", "Area → editor (draw, arrows, text)"),
+                 ("hk_full_edit", "Whole screen → editor"), ("hk_record", "Record screen · press again to stop")]
+
+    def _capture_tab(self) -> QWidget:
+        from .capture import capture_dir, format_name
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(4, 12, 4, 4)
+        g = QGridLayout()
+        g.setHorizontalSpacing(14)
+        g.setVerticalSpacing(10)
+        r = 0
+        sec = QLabel("SHORTCUTS – WORK IN EVERY APP")
+        sec.setObjectName("section")
+        g.addWidget(sec, r, 0, 1, 2)
+        r += 1
+        self.keys = {}
+        for key, label in self.SHORTCUTS:
+            g.addWidget(QLabel(label), r, 0)
+            row = QHBoxLayout()
+            ed = QKeySequenceEdit(self.s.get(key))
+            ed.setMaximumSequenceLength(1) if hasattr(ed, "setMaximumSequenceLength") else None
+            ed.editingFinished.connect(lambda key=key, ed=ed: self._save(key, ed.keySequence().toString()))
+            row.addWidget(ed, 1)
+            clr = QPushButton("✕")
+            clr.setToolTip("No shortcut")
+            clr.setFixedWidth(34)
+            clr.setStyleSheet("padding: 0;")
+            clr.clicked.connect(lambda _=False, key=key, ed=ed: (ed.clear(), self._save(key, "")))
+            row.addWidget(clr)
+            g.addLayout(row, r, 1)
+            self.keys[key] = ed
+            r += 1
+        reset = QPushButton("Default shortcuts")
+        reset.clicked.connect(self._default_keys)
+        g.addWidget(reset, r, 1, Qt.AlignLeft)
+        r += 1
+        sec = QLabel("SAVING")
+        sec.setObjectName("section")
+        g.addWidget(sec, r, 0, 1, 2)
+        r += 1
+        g.addWidget(QLabel("Folder"), r, 0)
+        frow = QHBoxLayout()
+        self.cdir = QLabel(self.s.get("capture_dir") or f"{capture_dir()}  ·  videos: {capture_dir(video=True)}")
+        self.cdir.setObjectName("dim")
+        self.cdir.setWordWrap(True)
+        frow.addWidget(self.cdir, 1)
+        ch = QPushButton("Change…")
+        ch.clicked.connect(self._pick_dir)
+        frow.addWidget(ch)
+        g.addLayout(frow, r, 1)
+        r += 1
+        g.addWidget(QLabel("File name"), r, 0)
+        self.cname = QLineEdit(self.s.get("capture_name"))
+        self.cname.setToolTip("%Y year · %m month · %d day · %H hour · %M minute · %S second · %r 4 random letters")
+        g.addWidget(self.cname, r, 1)
+        r += 1
+        self.cprev = QLabel()
+        self.cprev.setObjectName("dim")
+        g.addWidget(self.cprev, r, 1)
+        r += 1
+
+        def name_changed(t):
+            self.cprev.setText(f"→ {format_name(t)}.png   (%Y %m %d %H %M %S, %r = random)")
+        self.cname.textChanged.connect(name_changed)
+        self.cname.editingFinished.connect(lambda: self._save("capture_name", self.cname.text().strip()))
+        name_changed(self.cname.text())
+        cb = QCheckBox("Also save clipboard screenshots as files")
+        cb.setChecked(self.s.get("save_clip_shots"))
+        cb.toggled.connect(lambda on: self._save("save_clip_shots", bool(on)))
+        g.addWidget(cb, r, 1)
+        r += 1
+        sec = QLabel("SCREEN RECORDING")
+        sec.setObjectName("section")
+        g.addWidget(sec, r, 0, 1, 2)
+        r += 1
+        g.addWidget(QLabel("Frame rate"), r, 0)
+        fps = QComboBox()
+        for f in (15, 24, 30, 60):
+            fps.addItem(f"{f} fps", f)
+        fps.setCurrentIndex(max(0, [15, 24, 30, 60].index(self.s.get("rec_fps")) if self.s.get("rec_fps") in (15, 24, 30, 60) else 2))
+        fps.currentIndexChanged.connect(lambda _: self._save("rec_fps", fps.currentData()))
+        g.addWidget(fps, r, 1)
+        r += 1
+        cur = QCheckBox("Show the mouse pointer")
+        cur.setChecked(self.s.get("rec_cursor"))
+        cur.toggled.connect(lambda on: self._save("rec_cursor", bool(on)))
+        g.addWidget(cur, r, 1)
+        r += 1
+        tip = QLabel("The microphone is picked on the recording bar (🎙).")
+        tip.setObjectName("dim")
+        g.addWidget(tip, r, 1)
+        v.addLayout(g)
+        v.addStretch(1)
+        return w
+
+    def _default_keys(self):
+        for key, ed in self.keys.items():
+            ed.setKeySequence(DEFAULTS[key])
+            self.s.set(key, DEFAULTS[key])
+        self.changed.emit()
+
+    def _pick_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Save screenshots and recordings to")
+        if d:
+            self.cdir.setText(d)
+            self._save("capture_dir", d)
+
+    # ---- Security
+    def _security_tab(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(4, 12, 4, 4)
+        v.setSpacing(10)
+        sec = QLabel("VIRUSTOTAL")
+        sec.setObjectName("section")
+        v.addWidget(sec)
+        txt = QLabel("Checks a file's fingerprint (SHA-256) against 70+ antivirus engines – right inside DragShift.\n"
+                     "Get a free key once: sign up at virustotal.com → your profile → API key, then paste it here.\n"
+                     "Free keys allow 4 lookups a minute and 500 a day.")
+        txt.setWordWrap(True)
+        txt.setObjectName("dim")
+        v.addWidget(txt)
+        row = QHBoxLayout()
+        self.vt = QLineEdit(self.s.get("vt_key"))
+        self.vt.setEchoMode(QLineEdit.Password)
+        self.vt.setPlaceholderText("VirusTotal API key")
+        self.vt.editingFinished.connect(lambda: self._save("vt_key", self.vt.text().strip()))
+        row.addWidget(self.vt, 1)
+        show = QPushButton("Show")
+        show.setCheckable(True)
+        show.toggled.connect(lambda on: self.vt.setEchoMode(QLineEdit.Normal if on else QLineEdit.Password))
+        row.addWidget(show)
+        test = QPushButton("Test")
+        test.clicked.connect(self._test_vt)
+        row.addWidget(test)
+        v.addLayout(row)
+        self.vt_status = QLabel("")
+        self.vt_status.setWordWrap(True)
+        v.addWidget(self.vt_status)
+        sec = QLabel("ON THIS COMPUTER")
+        sec.setObjectName("section")
+        v.addWidget(sec)
+        local = QLabel("Windows Defender scans the file locally – no key, nothing leaves your PC.\n"
+                       "The digital signature shows who published a program." if IS_WIN else
+                       "The code signature shows who published an app. Local antivirus scanning is only on Windows.")
+        local.setWordWrap(True)
+        local.setObjectName("dim")
+        v.addWidget(local)
+        v.addStretch(1)
+        return w
+
+    def _test_vt(self):
+        from . import virusscan
+        from .bg import run_bg
+        key = self.vt.text().strip()
+        self._save("vt_key", key)
+        self.vt_status.setText("Testing…")
+        self.vt_status.setObjectName("dim")
+        # the EICAR test file's hash: every engine knows it
+        eicar = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+
+        def ok(c):
+            good = c.state in ("threat", "suspicious", "clean")
+            self.vt_status.setText("✓ The key works." if good else c.text)
+            self.vt_status.setObjectName("good" if good else "warn")
+            self.vt_status.setStyleSheet(self.vt_status.styleSheet())
+
+        def bad(m):
+            self.vt_status.setText(m)
+            self.vt_status.setObjectName("warn")
+            self.vt_status.setStyleSheet(self.vt_status.styleSheet())
+        run_bg(lambda: virusscan.vt_lookup(eicar, key), ok, bad)
 
 
 class WelcomeWindow(GlassWindow):
