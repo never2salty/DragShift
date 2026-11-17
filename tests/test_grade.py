@@ -273,11 +273,16 @@ def test_audio_drives_the_clock(monkeypatch, grey_clip):
             self.run = True
 
             def loop():
+                # like a real sound card: as many 10 ms blocks as wall-clock time asks for
                 buf = bytearray(480 * 4)
+                t0, done = time.monotonic(), 0
                 while self.run:
-                    self.cb(buf, 480, None, None)
-                    got.append(bytes(buf))
-                    time.sleep(0.01)
+                    due = int((time.monotonic() - t0) / 0.01) + 1
+                    while done < due and self.run:
+                        self.cb(buf, 480, None, None)
+                        got.append(bytes(buf))
+                        done += 1
+                    time.sleep(0.005)
             threading.Thread(target=loop, daemon=True).start()
 
         def abort(self):
@@ -295,6 +300,6 @@ def test_audio_drives_the_clock(monkeypatch, grey_clip):
     time.sleep(0.6)
     pos = a.position()
     a.stop()
-    assert 1.1 < pos < 1.8, pos            # slow CI runners oversleep
+    assert 1.2 < pos < 1.9, pos
     assert any(any(b) for b in got)                  # real (non-silent) samples reached the card
     assert not a.start(grey_clip, 0, 8.0, media.probe(grey_clip))   # silent above 4×
