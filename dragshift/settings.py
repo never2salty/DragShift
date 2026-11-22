@@ -41,8 +41,6 @@ DEFAULTS = {
     "rec_mic": "",
     "rec_fps": 30,
     "rec_cursor": True,
-    # security
-    "vt_key": "",
 }
 
 
@@ -51,6 +49,8 @@ class Settings:
         self.q = QSettings(APP, APP)
 
     def get(self, key):
+        if key == "trigger":
+            return "shift"
         v = self.q.value(key, DEFAULTS[key])
         d = DEFAULTS[key]
         if isinstance(d, bool):
@@ -63,6 +63,8 @@ class Settings:
         return v
 
     def set(self, key, value):
+        if key == "trigger":
+            value = "shift"
         self.q.setValue(key, value)
         self.apply()
 
@@ -118,8 +120,9 @@ def set_autostart(on: bool):
                 pass
 
 
-TRIGGERS = ([("shift", "Shift ⇧"), ("ctrl", "Control ⌃"), ("alt", "Option ⌥")] if IS_MAC
-            else [("shift", "Shift"), ("ctrl", "Ctrl"), ("alt", "Alt")])
+# Only Shift: Ctrl/Alt + drag is what selection rectangles, copies and window moves use, so they
+# opened the menu by accident (1.8.1). Older settings saying "ctrl"/"alt" are read as Shift.
+TRIGGERS = [("shift", "Shift ⇧")] if IS_MAC else [("shift", "Shift")]
 OUTPUTS = [("next", "Next to the original"), ("folder", "In a “DragShift” subfolder")]
 DPIS = [(150, "150 dpi · small"), (200, "200 dpi · balanced"), (300, "300 dpi · print")]
 VIDEO_QUALITIES = [("high", "High · bigger files"), ("balanced", "Balanced"), ("small", "Small · for sharing")]
@@ -150,9 +153,7 @@ class SettingsWindow(GlassWindow):
             return c
 
         grid.addWidget(QLabel("Open the menu with"), r, 0)
-        self.trigger = combo(TRIGGERS, self.s.get("trigger"))
-        self.trigger.currentIndexChanged.connect(lambda _: self._save("trigger", self.trigger.currentData()))
-        grid.addWidget(self.trigger, r, 1)
+        grid.addWidget(QLabel(TRIGGERS[0][1]), r, 1)
         r += 1
         hint = QLabel("…pressed while you’re dragging a file")
         hint.setObjectName("dim")
@@ -239,7 +240,6 @@ class SettingsWindow(GlassWindow):
         gl.addStretch(1)
         self.tabs.addTab(general, "General")
         self.tabs.addTab(self._capture_tab(), "Capture")
-        self.tabs.addTab(self._security_tab(), "Security")
         self.body.addWidget(self.tabs, 1)
         about = QLabel(f"DragShift {__version__}  ·  originals are never modified")
         about.setObjectName("dim")
@@ -364,72 +364,6 @@ class SettingsWindow(GlassWindow):
         if d:
             self.cdir.setText(d)
             self._save("capture_dir", d)
-
-    # ---- Security
-    def _security_tab(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(4, 12, 4, 4)
-        v.setSpacing(10)
-        sec = QLabel("VIRUSTOTAL")
-        sec.setObjectName("section")
-        v.addWidget(sec)
-        txt = QLabel("Checks a file's fingerprint (SHA-256) against 70+ antivirus engines – right inside DragShift.\n"
-                     "Get a free key once: sign up at virustotal.com → your profile → API key, then paste it here.\n"
-                     "Free keys allow 4 lookups a minute and 500 a day.")
-        txt.setWordWrap(True)
-        txt.setObjectName("dim")
-        v.addWidget(txt)
-        row = QHBoxLayout()
-        self.vt = QLineEdit(self.s.get("vt_key"))
-        self.vt.setEchoMode(QLineEdit.Password)
-        self.vt.setPlaceholderText("VirusTotal API key")
-        self.vt.editingFinished.connect(lambda: self._save("vt_key", self.vt.text().strip()))
-        row.addWidget(self.vt, 1)
-        show = QPushButton("Show")
-        show.setCheckable(True)
-        show.toggled.connect(lambda on: self.vt.setEchoMode(QLineEdit.Normal if on else QLineEdit.Password))
-        row.addWidget(show)
-        test = QPushButton("Test")
-        test.clicked.connect(self._test_vt)
-        row.addWidget(test)
-        v.addLayout(row)
-        self.vt_status = QLabel("")
-        self.vt_status.setWordWrap(True)
-        v.addWidget(self.vt_status)
-        sec = QLabel("ON THIS COMPUTER")
-        sec.setObjectName("section")
-        v.addWidget(sec)
-        local = QLabel("Windows Defender scans the file locally – no key, nothing leaves your PC.\n"
-                       "The digital signature shows who published a program." if IS_WIN else
-                       "The code signature shows who published an app. Local antivirus scanning is only on Windows.")
-        local.setWordWrap(True)
-        local.setObjectName("dim")
-        v.addWidget(local)
-        v.addStretch(1)
-        return w
-
-    def _test_vt(self):
-        from . import virusscan
-        from .bg import run_bg
-        key = self.vt.text().strip()
-        self._save("vt_key", key)
-        self.vt_status.setText("Testing…")
-        self.vt_status.setObjectName("dim")
-        # the EICAR test file's hash: every engine knows it
-        eicar = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
-
-        def ok(c):
-            good = c.state in ("threat", "suspicious", "clean")
-            self.vt_status.setText("✓ The key works." if good else c.text)
-            self.vt_status.setObjectName("good" if good else "warn")
-            self.vt_status.setStyleSheet(self.vt_status.styleSheet())
-
-        def bad(m):
-            self.vt_status.setText(m)
-            self.vt_status.setObjectName("warn")
-            self.vt_status.setStyleSheet(self.vt_status.styleSheet())
-        run_bg(lambda: virusscan.vt_lookup(eicar, key), ok, bad)
 
 
 class WelcomeWindow(GlassWindow):

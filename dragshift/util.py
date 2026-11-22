@@ -40,10 +40,6 @@ def data_dir() -> Path:
     return base
 
 
-PROGRAM_EXTS = {".exe", ".msi", ".msix", ".appx", ".dll", ".scr", ".com", ".bat", ".cmd", ".ps1", ".vbs",
-                ".js", ".jar", ".apk", ".dmg", ".pkg", ".app", ".zip", ".rar", ".7z", ".iso", ".sys"}
-
-
 def category(path: str | Path) -> str | None:
     ext = Path(path).suffix.lower()
     if ext in IMAGE_EXTS:
@@ -66,8 +62,6 @@ def category(path: str | Path) -> str | None:
         return "docx"
     if ext in TEXT_EXTS:
         return "text"
-    if ext in PROGRAM_EXTS:
-        return "program"
     return None
 
 

@@ -259,10 +259,12 @@ jobs:
             Beim ersten Start meldet macOS, dass die App nicht geprüft werden kann: einmal **Fertig** klicken, dann *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*. Oder im Terminal: `xattr -dr com.apple.quarantine /Applications/DragShift.app`
             DragShift sitzt dann oben in der Menüleiste.
 
-            **Neu in 1.8**
+            **Neu in 1.8.1**
+            - Das Kreismenü öffnet sich nur noch mit **Shift** beim Ziehen einer Datei. Strg/Alt + Ziehen (Auswahlrahmen, Kopieren, Fenster) öffnet DragShift nicht mehr.
+            - Virenscan und Ordner-Icons entfernt.
+
+            **Aus 1.8**
             - **Screenshots** per Tastenkürzel (funktionieren in jedem Programm): Strg+Shift+1 Bereich → Zwischenablage · Strg+Shift+2 Bereich → Editor · Strg+Shift+3 ganzer Bildschirm → Editor. Im Editor: Pfeile, Rahmen, Kreise, Linien, Text, Verpixeln, Spotlight, Zähler 1-2-3, Stift, Marker, Zuschneiden.
-            - **Bildschirmaufnahme** als MP4 (mit Mikrofon) oder GIF: Strg+Shift+5, nochmal drücken = Stopp. Danach erscheint unten links eine Karte zum Reinziehen, Öffnen oder Trimmen.
-            - **Virenscan** für .exe, .msi, .zip, .dmg …: Windows Defender lokal + VirusTotal (kostenloser API-Key in Einstellungen → Security), alles im Programm, ohne Browser.
-            - **Ordner-Icons**: Bibliothek mit Farben und Symbolen, eigene Bilder hinzufügen, Ordner einfach auf ein Icon ziehen.
-            - Alle Kürzel, Speicherordner und Dateinamen unter Einstellungen → Capture.
+            - **Bildschirmaufnahme** als MP4 (mit Mikrofon) oder GIF: Strg+Shift+5, nochmal drücken = Stopp.
+            - Kürzel, Speicherordner und Dateinamen unter Einstellungen → Capture.
           files: out/*

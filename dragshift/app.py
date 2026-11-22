@@ -215,8 +215,6 @@ class DragShiftApp(QObject):
         self.act_clip = m.addAction("Screenshot → clipboard", self.shot_clipboard)
         self.act_full = m.addAction("Whole screen → editor", self.shot_fullscreen)
         self.act_rec = m.addAction("Record screen…", self.record_toggle)
-        m.addAction("Virus scan…", lambda: self.open_scan([]))
-        m.addAction("Folder icons…", lambda: self.open_folder_icons([]))
         self.act_drop = QAction("Show drop icon", m, checkable=True, checked=self.settings.get("drop_icon"))
         self.act_drop.toggled.connect(self.set_drop_icon)
         m.addAction(self.act_drop)
@@ -325,14 +323,10 @@ class DragShiftApp(QObject):
             if media_files:
                 items += [Item("Player", "◎", key="player:player", hint=f"{len(media_files)} videos/audio · screenshots"),
                           Item("Trim", "✂", key="player:trim", hint="Pick a file · set In / Out")]
-            if n_dirs:
-                items.append(Item("Folder icon", "▰", key="icons:icons", hint="Colour · symbol · your picture"))
             return {"Folder": items}
         cat = category(paths[0])
         if cat is None:
             return {"Unsupported": []}
-        if cat == "program":
-            return {"Check": [Item("Virus scan", "⛨", key="scan:scan", hint="Defender + VirusTotal")]}
         ext = Path(paths[0]).suffix
         same = [p for p in paths if category(p) == cat]
         convert_items = []
@@ -371,12 +365,6 @@ class DragShiftApp(QObject):
             return
         if kind == "player":
             self.open_player(paths, name)
-            return
-        if kind == "scan":
-            self.open_scan(paths)
-            return
-        if kind == "icons":
-            self.open_folder_icons([p for p in paths if os.path.isdir(p)])
             return
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
@@ -579,8 +567,6 @@ class DragShiftApp(QObject):
                    ("Folder", "⧉", "start:folder", "Convert a whole folder"),
                    ("Screenshot", "⌗", "start:shot", "Area → draw · copy"),
                    ("Record", "●", "start:record", "Video or GIF"),
-                   ("Scan", "⛨", "start:scan", "Virus check"),
-                   ("Icons", "▰", "start:icons", "Folder icons"),
                    ("History", "↺", "start:history", "What you converted"),
                    ("Settings", "⚙", "start:settings", "")]
 
@@ -617,10 +603,7 @@ class DragShiftApp(QObject):
             QTimer.singleShot(250, self.shot_editor)        # let the menu fade out of the picture
         elif k == "record":
             QTimer.singleShot(250, self.record_toggle)
-        elif k == "scan":
-            self.open_scan([])
-        elif k == "icons":
-            self.open_folder_icons([])
+
 
     def open_folder_dialog(self):
         d = QFileDialog.getExistingDirectory(None, "Choose a folder to convert", QDir.homePath())
@@ -915,30 +898,6 @@ class DragShiftApp(QObject):
         except Exception:
             pass
 
-    def open_scan(self, paths):
-        from .virusscan import ScanWindow
-        for w in self.windows:
-            if w.__class__.__name__ == "ScanWindow" and w.isVisible():
-                w.add_paths(paths)
-                w.raise_()
-                w.activateWindow()
-                return w
-        w = ScanWindow(paths, self.settings)
-        self.open_window(w)
-        return w
-
-    def open_folder_icons(self, folders):
-        from .foldericons import FolderIconWindow
-        for w in self.windows:
-            if isinstance(w, FolderIconWindow) and w.isVisible():
-                w.set_targets(w.targets + [Path(f) for f in folders])
-                w.raise_()
-                w.activateWindow()
-                return w
-        w = FolderIconWindow(folders)
-        self.open_window(w)
-        return w
-
     def show_welcome(self):
         self.open_window(WelcomeWindow(self.settings, self.trigger_label()))
 
@@ -1166,15 +1125,10 @@ def selftest() -> int:
             DropIcon().close()
             assert updater.newer("99.0") and not updater.newer("0.1")
             print("selftest: capture/scan/icons", flush=True)
-            from . import capture, foldericons, recorder, snapeditor, virusscan
+            from . import capture, recorder, snapeditor
             from .hotkeys import HotkeyManager, win_combo
             assert win_combo("Ctrl+Shift+1") is not None
             HotkeyManager().clear()
-            foldericons.write_ico(foldericons.render_folder("#3ea6ff", "star"), Path(d) / "f.ico")
-            foldericons.FolderIconWindow([d]).close()
-            virusscan.sha256(src)
-            print(f"defender: {virusscan.defender_exe()}")
-            virusscan.ScanWindow([]).close()
             from PySide6.QtGui import QImage as _QI
             shot = _QI(str(src))
             snapeditor.flatten(shot, [])

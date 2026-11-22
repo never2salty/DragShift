@@ -45,8 +45,9 @@ class DragShiftWatcher(QObject):
         self.timer = QTimer(self, interval=15, timeout=self._tick)
 
     def set_key(self, name: str):
-        self.key_name = name
-        self.vk = {"shift": VK_SHIFT, "ctrl": 0x11, "alt": 0x12}.get(name, VK_SHIFT)
+        # always Shift: Ctrl/Alt + left-drag is everyday selecting/copying and must not open the menu
+        self.key_name = "shift"
+        self.vk = VK_SHIFT
 
     def start(self):
         if self._user32 is not None or self._mac is not None:

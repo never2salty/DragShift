@@ -22,12 +22,12 @@ Oder im [Release](../../releases/latest) **DragShift-mac-apple-silicon.dmg** (M1
 | **Adobe** – Premiere .prproj, Illustrator .ai | Premiere: Kopie für ältere Premiere-Versionen · AI: PDF, PNG, JPG, SVG | – |
 | PDF, Word, Text | wie im Original | wie im Original |
 
-**Neu in 1.8: Screenshots, Bildschirmaufnahme, Virenscan, Ordner-Icons.**
+**Neu in 1.8.1:** Das Menü öffnet sich nur noch mit **Shift** beim Ziehen – Strg/Alt + Ziehen (Auswahlrahmen, Kopieren) öffnet DragShift nicht mehr. Virenscan und Ordner-Icons sind wieder entfernt.
+
+**Neu in 1.8: Screenshots und Bildschirmaufnahme.**
 - **Screenshots per Tastenkürzel** – funktionieren in jedem Programm: **Strg+Shift+1** Bereich → Zwischenablage (unten links erscheint eine Karte: reinziehen, *Edit*, *Save*), **Strg+Shift+2** Bereich → Editor, **Strg+Shift+3** ganzer Bildschirm → Editor. Beim Auswählen zeigt DragShift die Größe in Pixeln; Klick ohne Ziehen = ganzer Bildschirm, Shift = Quadrat, Esc = Abbruch.
 - **Editor:** Zuschneiden (C), Rahmen (R), gefüllter Rahmen (F), Ellipse (O), Linie (L), Pfeil (A), Text (T), Verpixeln (X), Spotlight (S – dunkelt alles andere ab), Zähler ①②③ (N), Stift (P), Marker (M); Farbe und Linienstärke oben rechts, Shift für gerade Linien/Quadrate, Strg+Z/Y. **Done** (Enter) speichert und kopiert, *Copy*, *Save as…*
 - **Bildschirmaufnahme** (**Strg+Shift+5**, nochmal = Stopp): Bereich wählen → Leiste mit 🎙 Mikrofon, Größe, ganzer Bildschirm, **Record video** (MP4) oder **Record GIF**. Rahmen und Leiste sind in der Aufnahme nicht zu sehen. Danach Karte mit Dauer und Größe zum Reinziehen, Öffnen oder Trimmen.
-- **Virenscan:** .exe, .msi, .zip, .dmg … ziehen → Shift → *Virus scan* (oder Startkreis → *Scan*). Windows Defender prüft lokal, die Signatur zeigt den Herausgeber, **VirusTotal** prüft den Fingerabdruck in 70+ Scannern – alles im Fenster, kein Browser. Dafür einmal einen kostenlosen API-Key unter *Einstellungen → Security* eintragen. Unbekannte Dateien kann man auf Wunsch hochladen.
-- **Ordner-Icons:** Startkreis → *Icons* (oder Ordner ziehen → Shift → *Folder icon*). Bibliothek mit Farben und Symbolen, eigene Icons aus Farbe + Symbol/Text/Emoji, eigene Bilder (PNG, JPG, ICO, HEIC) einfach hineinziehen. Ordner auf ein Icon ziehen = fertig; *Reset to normal* stellt das Standard-Icon wieder her. Das Icon liegt im Ordner selbst und bleibt auch auf USB-Sticks und anderen PCs erhalten.
 - Kürzel, Speicherordner (Standard: *Bilder\DragShift* und *Videos\DragShift*) und Dateinamen-Muster unter *Einstellungen → Capture*.
 
 **Neu in 1.6: ein Player für alles, Trimmen, Startkreis.**
@@ -136,7 +136,7 @@ You can also right-click a file → **DragShift…**, use **Send to → DragShif
 | Word (.docx) | PDF (uses Microsoft Word if it's installed, otherwise a built-in renderer), TXT | — |
 | Text (.txt, .md, .csv…) | PDF, DOCX | — |
 
-**Settings** (tray menu): trigger key (Shift, Ctrl or Alt), where results go (next to the original or a `DragShift` subfolder), JPG/WebP quality, PDF → image resolution, and start at login.
+**Settings** (tray menu): where results go (next to the original or a `DragShift` subfolder), JPG/WebP quality, PDF → image resolution, and start at login.
 
 ## The look
 
